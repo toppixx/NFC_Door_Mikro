@@ -8,7 +8,7 @@
   HW setup:
   NFC   NodeMCU (ESP):
   SS (CS) D2    (GPIO4)
-  IRQ     D3    (GPIO0)
+  IRQ     D3    (GPIO0) //anderen pin suchen wird für flash user button wifi reset benutzt
   RST     D4    (GPIO2)
   SCK     D5    (GPIO14)
   MISO    D6    (GPIO12)
@@ -54,8 +54,9 @@ PN532 nfc(pn532spi);
 //WIFI Http stuff
 WiFiClient client;
 HTTPClient http;
-
-String BASE_URL = "http://10.42.0.1/";
+char strBuffer[16];
+char IP[4] = {10,42,0,1};
+String BASE_URL = "";
 void httpRequest(String path, String body);
 
 void configModeCallback (WiFiManager *myWiFiManager) {
@@ -66,6 +67,12 @@ void configModeCallback (WiFiManager *myWiFiManager) {
 
 
 void setup(void) {
+  //IP = {10,42,0,1};
+  //char IPbuff[4] = {10,42,0,1};
+  //IP* = &IPbuff;
+  sprintf(strBuffer,"%d.%d.%d.%d",IP[0], IP[1], IP[2], IP[3]);
+  BASE_URL = "http://"+String(strBuffer)+"/";
+
   //setup user button to give the posibility to reset wifi stack and do a new connection over the web interface.
   pinMode(interruptPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(interruptPin), isrResetToFactoryDefaults, FALLING);
@@ -76,6 +83,7 @@ void setup(void) {
 
   Serial.begin(115200);
   Serial.println("Hello!");
+  Serial.println(BASE_URL);
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
@@ -156,7 +164,7 @@ void setup(void) {
   nfc.SAMConfig();
 
   Serial.println("Ping on Ip to look if server is allive");
-  IPAddress ip (10,0,60, 144); // The remote ip to ping
+  IPAddress ip (IP[0],IP[1],IP[2], IP[3]); // The remote ip to ping
   bool ret = Ping.ping(ip);
   if(ret==true)
     Serial.println("Server available");
@@ -164,7 +172,7 @@ void setup(void) {
     Serial.println("Cant reach server");
   Serial.println("Waiting for an ISO14443A card");
   Serial.println("\n-----------\n");
-  WiFi.disconnect() ;
+  //WiFi.disconnect() ; //hard wifi reset instead of the button. Thats the old school version of reseting the Wifi
 }
 
 void loop(void) {
@@ -340,9 +348,9 @@ void httpRequest(String path, String body)
 String makeRequest(String path, String body)
 {
   http.begin(BASE_URL + path);
-  //http.addHeader("Authorization: ", "Token 7ea758ff12441d5a07749c3a062af8d567201b83");
+  http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
   //http.setAuthorization("Token 7ea758ff12441d5a07749c3a062af8d567201b83");
-  http.setAuthorization("Authorization:", "Token 7ea758ff12441d5a07749c3a062af8d567201b83");
+  //http.setAuthorization("Authorization:", "Token 7ea758ff12441d5a07749c3a062af8d567201b83");
   Serial.println(http.getString());
 
   int httpCode = http.POST(body);
