@@ -198,7 +198,9 @@ void loop(void) {
         NfcTag tag = nfc.read();
         tag.print();
     }
-  uncommented bevor commiting this is absolutly not working for now need to implement <NfcAdapter.h> library
+uncommented bevor commiting this is absolutly not working for now need to implement <NfcAdapter.h>
+
+
 
     */
   if (success) {
