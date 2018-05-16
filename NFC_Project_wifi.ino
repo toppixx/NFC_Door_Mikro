@@ -19,7 +19,6 @@
 /**************************************************************************/
 
 #include <ESP8266WiFi.h>
-#include <WiFiUdp.h>
 #include <WiFiClient.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager
 #include <ArduinoOTA.h>
@@ -35,14 +34,11 @@
 
 void unlock();
 //userbutton reset for connecting to new WIFI
-void hardwareReset();
 void resetToFactoryDefaults();
 void isrResetToFactoryDefaults(void);
 const byte interruptPin = 0;
 volatile boolean interruptUserButtonFlag = false;
 
-//UDP stuff:
-WiFiUDP Udp;
 //const unsigned int remotePort = 1337;
 const int UDP_PACKET_SIZE = 7; //change to whatever you need.
 byte packetBuffer[ UDP_PACKET_SIZE ]; //buffer to hold outgoing packets
@@ -64,50 +60,17 @@ void configModeCallback (WiFiManager *myWiFiManager) {
   Serial.println("IP: " + WiFi.softAPIP().toString());
 }
 
+void setupOTAFirmwareUpdate(void);
 
-void setup(void) {
-  sprintf(strBuffer,"%d.%d.%d.%d",IP[0], IP[1], IP[2], IP[3]);
-  BASE_URL = "http://"+String(strBuffer)+"/";
-
-  //setup user button to give the posibility to reset wifi stack and do a new connection over the web interface.
-  pinMode(interruptPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(interruptPin), isrResetToFactoryDefaults, FALLING);
-  WiFi.hostname("ESPNFC");
-
-  //WiFi.persistent(false);
-  //WiFi.mode(WIFI_STA); //prevent random APs from forming?!
-
-  Serial.begin(115200);
-  Serial.println("Hello!");
-  Serial.println(BASE_URL);
-
-  //WiFiManager
-  //Local intialization. Once its business is done, there is no need to keep it around
-  WiFiManager wifiManager;
-
-  Serial.println("Connecting to wifi..");
-  wifiManager.setAPCallback(configModeCallback); //set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
-  wifiManager.setConnectTimeout(30); //try to connect to known wifis for a long time before defaulting to AP mode
-
-  //fetches ssid and pass and tries to connect
-  //if it does not connect it starts an access point with the specified name
-  //here  "ESPNFC"
-  //and goes into a blocking loop awaiting configuration
-
-  if (!wifiManager.autoConnect("ESPNFC"))
-   {     
-
-      Serial.println("failed to connect and hit timeout");
-      ESP.restart(); //reset and try again, or maybe put it to deep sleep
-     
-  }
-  //OTA:
+void setupOTAFirmwareUpdate(void)
+{
+ //OTA:
   // Port defaults to 8266
-  // ArduinoOTA.setPort(8266);
+  ArduinoOTA.setPort(8266);
   // Hostname defaults to esp8266-[ChipID]
   ArduinoOTA.setHostname("ESPNFC");
   // No authentication by default
-  ArduinoOTA.setPassword((const char *)"1804020311");
+  ArduinoOTA.setPassword((const char *)"ubuntu1234");
   //ArduinoOTA.setPasswordHash((const char *)"77ca9ed101ac99e43b6842c169c20fda");
 
   ArduinoOTA.onStart([]() {
@@ -136,7 +99,50 @@ void setup(void) {
   });
 
   ArduinoOTA.begin();
+ 
+}
 
+void setup(void) {
+  //setup WIFI stuff
+  //setup default Ip Url things
+  sprintf(strBuffer,"%d.%d.%d.%d",IP[0], IP[1], IP[2], IP[3]);
+  BASE_URL = "http://"+String(strBuffer)+"/";
+
+  //setup user button to give the posibility to reset wifi stack and do a new connection over the web interface.
+  pinMode(interruptPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), isrResetToFactoryDefaults, FALLING);
+  //start WIFI with ssid ESPNFC
+  WiFi.hostname("ESPNFC");
+
+  //WiFi.persistent(false);
+  //WiFi.mode(WIFI_STA); //prevent random APs from forming?!
+
+  Serial.begin(115200);
+  Serial.println("Hello!");
+  Serial.println("Base URL:" + BASE_URL);
+
+  //WiFiManager
+  //Local intialization. Once its business is done, there is no need to keep it around
+  WiFiManager wifiManager;
+
+  Serial.println("Connecting to wifi..");
+  wifiManager.setAPCallback(configModeCallback); //set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
+  wifiManager.setConnectTimeout(30); //try to connect to known wifis for a long time before defaulting to AP mode
+
+  //fetches ssid and pass and tries to connect
+  //if it does not connect it starts an access point with the specified name
+  //here  "ESPNFC"
+  //and goes into a blocking loop awaiting configuration
+
+  if (!wifiManager.autoConnect("ESPNFC"))
+   {     
+
+      Serial.println("failed to connect and hit timeout");
+      ESP.restart(); //reset and try again, or maybe put it to deep sleep
+     
+  }
+  
+  setupOTAFirmwareUpdate();
   nfc.begin();
 
   uint32_t versiondata = nfc.getFirmwareVersion();
@@ -180,7 +186,21 @@ void loop(void) {
   // 'uid' will be populated with the UID, and uidLength will indicate
   // if the uid is 4 bytes (Mifare Classic) or 7 bytes (Mifare Ultralight)
   success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength);
+ /* uint8_t pageBuf[541];
+  for(uint16_t k=0;k<540;k++)
+    pageBuf[k]=nfc.mifareultralight_ReadPage(k,&pageBuf[k]);
+    
+    Serial.println(String((char*)(pageBuf)));
+*/
+/*    Serial.println("\nScan a NFC tag\n");
+    if (nfc.tagPresent())
+    {
+        NfcTag tag = nfc.read();
+        tag.print();
+    }
+  uncommented bevor commiting this is absolutly not working for now need to implement <NfcAdapter.h> library
 
+    */
   if (success) {
     Serial.println("Found a card!");
     Serial.print("UID Length: ");
@@ -213,12 +233,10 @@ void loop(void) {
            }
         if(body)
           {
-            body = String("form-data; name=")+String('"')+String("nfc_tag")+String('"')+String("\r\n\r\n")+String(buffer);
-            Serial.println(body);
             String path = "access/";
             httpRequest(path, body);
           }
-        delay(500); //avoid  flooding
+        delay(500); //avoid http POST flooding
     
   Serial.println("\n-----------\n");
   
