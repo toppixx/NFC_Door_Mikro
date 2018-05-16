@@ -34,11 +34,10 @@
 #include <ESP8266Ping.h>
 
 void unlock();
+//userbutton reset for connecting to new WIFI
 void hardwareReset();
 void resetToFactoryDefaults();
 void isrResetToFactoryDefaults(void);
-//const byte g_nPinReset = 16;
-
 const byte interruptPin = 0;
 volatile boolean interruptUserButtonFlag = false;
 
@@ -55,7 +54,7 @@ PN532 nfc(pn532spi);
 WiFiClient client;
 HTTPClient http;
 char strBuffer[16];
-char IP[4] = {10,42,0,1};
+char IP[4] = {192,168,43,173};
 String BASE_URL = "";
 void httpRequest(String path, String body);
 
@@ -67,9 +66,6 @@ void configModeCallback (WiFiManager *myWiFiManager) {
 
 
 void setup(void) {
-  //IP = {10,42,0,1};
-  //char IPbuff[4] = {10,42,0,1};
-  //IP* = &IPbuff;
   sprintf(strBuffer,"%d.%d.%d.%d",IP[0], IP[1], IP[2], IP[3]);
   BASE_URL = "http://"+String(strBuffer)+"/";
 
@@ -172,27 +168,9 @@ void setup(void) {
     Serial.println("Cant reach server");
   Serial.println("Waiting for an ISO14443A card");
   Serial.println("\n-----------\n");
-  //WiFi.disconnect() ; //hard wifi reset instead of the button. Thats the old school version of reseting the Wifi
 }
 
 void loop(void) {
-
-
-  #define NUM_ACCEPTED_UIDS 7 //<-----------------CHANGE THIS IF ADDING CARDS!!
-  const uint8_t acceptedUIDs[NUM_ACCEPTED_UIDS][8] = {
-                // It is neccessary to account for UID length since a 7 byte ID could contain a 4 byte ID, which would cause a misfire
-                //  #0    #1  #2    #3    #4    #5    #6    #Length
-                   {0x04, 0x04, 0x10, 0x12, 0xFF, 0x38, 0x85, 7},//LektorP
-                   //{0x04, 0x97, 0x03, 0x12, 0xFF, 0x38, 0x84, 7},//Robotto old
-                   {0x7A, 0x3F, 0x54, 0xA2, 0x00, 0x00, 0x00, 4}, //robotto NEW
-                   //{0xE0, 0x84, 0xDF, 0x16, 0x00, 0x00, 0x00, 4}, //DjAlligatorFace
-                   {0x44, 0x0F, 0x31, 0xC6, 0x00, 0x00, 0x00, 4}, //BAK
-                   {0xEA, 0xD6, 0x54, 0xA2, 0x00, 0x00, 0x00, 4}, //Nikolaj
-                   {0xA9, 0xCD, 0x85, 0x89,0x00, 0x00, 0x00, 4}, //NFC_chip_1
-                   {0xF0, 0xD2, 0x52, 0x83,0x00, 0x00, 0x00, 4}, //NFC_chip_2
-                   {0x31, 0xB0, 0x4C, 0x2E,0x00, 0x00, 0x00, 4} //NFC_card_1
-                 };
-
 
   boolean success;
   uint8_t uidLength;   // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
@@ -220,116 +198,38 @@ void loop(void) {
     // wait until the card is taken away
     while (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength)) yield(); //let ESPcore handle wifi stuff
 
-    for (int j = 0; j < NUM_ACCEPTED_UIDS; ++j) //check each UID
-    {
-      uint8_t matchingBytes=0;
-      Serial.print("Checking for matching bytes with uid #");
-      Serial.print(j);
-      Serial.print(": ");
-
-    if(uidLength!=acceptedUIDs[j][7]) //length check
-      {
-        Serial.println("UID length mismatch; skipping.");
-        continue;
-      }
-
-        for (uint8_t k=0; k < uidLength; k++)
-          {
-        if(uid[k]==acceptedUIDs[j][k]) matchingBytes++;
-          }
-
-      if (matchingBytes==uidLength) //is the id matching with an intended length?
-        {
-        Serial.print("MATCH! ");
-        //#uint8_t buffer[] = "1234567";
-        //for(uint8_t k=0;k<uidLength;k++)
-        //  buffer[k] = uid[k];
         char buffer[] = "1234567";
         String body;
         
         if(uidLength==4)
           {
-            sprintf(buffer, "%d%d%d%d",uid[0],uid[1],uid[2],uid[3]);
+            sprintf(buffer, "%02X:%02X:%02X:%02X",uid[0],uid[1],uid[2],uid[3]);
             body = String(buffer);
           }
         if(uidLength==7)
            {
-            sprintf(buffer, "%d%d%d%d%d%d%d",uid[0],uid[1],uid[2],uid[3],uid[4],uid[5],uid[6]); 
+            sprintf(buffer, "%02X:%02X:%02X:%02X%02X:%02X:%02X",uid[0],uid[1],uid[2],uid[3],uid[4],uid[5],uid[6]); 
             body = String(buffer);
            }
-        String path = "access/";
         if(body)
           {
+            body = String("form-data; name=")+String('"')+String("nfc_tag")+String('"')+String("\r\n\r\n")+String(buffer);
             Serial.println(body);
+            String path = "access/";
             httpRequest(path, body);
           }
-        unlock();
-        delay(500); //avoid UDP flooding
-        break; //would you check the rest of the UIDs?
-        
-      }
-    else Serial.println("No deal.");
-
-  }
+        delay(500); //avoid  flooding
+    
   Serial.println("\n-----------\n");
+  
+  //check if button was pressed. that will reset the wifi to default and api mode.
+  if (interruptUserButtonFlag) resetToFactoryDefaults();
   }
   else yield(); // PN532 probably timed out waiting for a card.. let's let the ESPcore handle wifi stuff
 
-  //check if button was pressed. that will reset the wifi to default and api mode.
-  if (interruptUserButtonFlag) resetToFactoryDefaults();
+
 }
 
-
-void unlock()
-{
-
-  Serial.println("Sending mDNS query");
-  //BUG: only services named "esp" are found... https://github.com/esp8266/Arduino/issues/2151
-  int n = MDNS.queryService("esp", "udp"); // Send out query for esp tcp services
-  Serial.println("mDNS query done");
-  if (n == 0) {
-    Serial.println("no services found doing nothing..");
-    return;
-  }
-  else {
-    Serial.print(n);
-    Serial.println(" service(s) found");
-    for (int i = 0; i < n; ++i) {
-      // Print details for each service found
-      Serial.print(i + 1);
-      Serial.print(": ");
-      Serial.print(MDNS.hostname(i));
-      Serial.print(" (");
-      Serial.print(MDNS.IP(i));
-      Serial.print(":");
-      Serial.print(MDNS.port(i));
-      Serial.println(")");
-
-
-  //workaround:
-  if(MDNS.hostname(i)=="esprelay"){
-  Serial.println("Sending UDP packet...");
-  // set all bytes in the buffer to 0
-  memset(packetBuffer, 0, UDP_PACKET_SIZE);
-
-  packetBuffer[0]='S';
-  packetBuffer[1]='E';
-  packetBuffer[2]='S';
-  packetBuffer[3]='A';
-  packetBuffer[4]='M';
-  packetBuffer[5]='E';
-  packetBuffer[6]='\n';
-
-  //Udp.beginPacket(doorIP, remotePort);
-  Udp.beginPacket(MDNS.IP(i), MDNS.port(i));
-
-  //Udp.beginPacket(doorAddress,remotePort);
-  Udp.write(packetBuffer, UDP_PACKET_SIZE);
-  Udp.endPacket();
-  }
-  }
-}
-}
 
 // ############# HTTP REQUEST ################ //
 
@@ -340,49 +240,50 @@ void httpRequest(String path, String body)
   if (!payload) {
     return;
   }
-
   Serial.println("##[RESULT]## ==> " + payload);
-
 }
 
 String makeRequest(String path, String body)
 {
   http.begin(BASE_URL + path);
   http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
-  //http.setAuthorization("Token 7ea758ff12441d5a07749c3a062af8d567201b83");
-  //http.setAuthorization("Authorization:", "Token 7ea758ff12441d5a07749c3a062af8d567201b83");
+  body = "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a\n\r------NFCtagHandleBoundary15gabfalsd091590a\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\nA9:CD:85:89\r\n------NFCtagHandleBoundary15gabfalsd091590a--";
+  http.addHeader("content-type", "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a");
+  //http.addParameter("multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW", "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\nA9:CD:85:89\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW--");
   Serial.println(http.getString());
 
   int httpCode = http.POST(body);
 
   if (httpCode < 0) {
     Serial.println("request error - " + httpCode);
-    
-    return "";
+    Serial.println(http.errorToString(httpCode));
+
+    return http.errorToString(httpCode);
 
   }
   Serial.println(http.getString());
 
   if (httpCode != HTTP_CODE_OK) {
-    return "";
+    return http.errorToString(httpCode);
   }
+  return "";
+}
+//###############GET REQUEST#############
+void httpGet(String path)
+{
+   http.begin(BASE_URL + path);
+  http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
+  int httpCode = http.GET();
+  
+  return;
 }
 
 //code from https://github.com/tzapu/WiFiManager/issues/142
 void resetToFactoryDefaults() {
   WiFi.disconnect();
   delay(3000);
-  //hardwareReset();
   interruptUserButtonFlag = false;
 }
-
-//dosent work pins are not correct wired
-/*void hardwareReset() {
-  pinMode(g_nPinReset, OUTPUT);
-  digitalWrite(g_nPinReset, false);
-  delay(3000);
-}
-*/
 
 void isrResetToFactoryDefaults(void) {
   Serial.println("Resetting to factory defaults");
