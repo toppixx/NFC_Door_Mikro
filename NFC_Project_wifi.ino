@@ -253,67 +253,32 @@ void loop(void) {
                   }
                 }
                 else
-                Serial.println("read of NFCtag was corrupted");
+                Serial.println("read of NFCtag: was corrupted");
               }
               else
-              Serial.println("read of NFCtag was corrupted");
+              Serial.println("read of NFCtag: was corrupted");
             }
           }
         }
         else
-        Serial.println("read of NFCtag no entry to read from");
-    }
+        Serial.println("read of NFCtag: no entry to read from");
 
-  if (success) {
-    Serial.println("Found a card!");
-    Serial.print("UID Length: ");
-    Serial.print(uidLength, DEC);
-    Serial.println(" bytes");
-    Serial.print("UID Value: ");
 
-    for (uint8_t i=0; i < uidLength; i++)
-    {
-      Serial.print(" 0x");
-      Serial.print(uid[i], HEX);
-    }
-    Serial.println("");
-
-    // wait until the card is taken away
-    while (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength)) yield(); //let ESPcore handle wifi stuff
-/*
-        char buffer[] = "1234567";
-
-        if(uidLength==4)
-          {
-            sprintf(buffer, "%02X:%02X:%02X:%02X",uid[0],uid[1],uid[2],uid[3]);
-            body = String(buffer);
-          }
-        if(uidLength==7)
-           {
-            sprintf(buffer, "%02X:%02X:%02X:%02X%02X:%02X:%02X",uid[0],uid[1],uid[2],uid[3],uid[4],uid[5],uid[6]);
-            body = String(buffer);
-           }
-        if(body)
-          {
-            String path = "access/";
-            httpRequest(path, body);
-          }
-          */
+        Serial.println("\n-----------\n");
         delay(500); //avoid http POST flooding
 
-  Serial.println("\n-----------\n");
+    }
 
   //check if button was pressed. that will reset the wifi to default and api mode.
   if (interruptUserButtonFlag) resetToFactoryDefaults();
-  }
   else yield(); // PN532 probably timed out waiting for a card.. let's let the ESPcore handle wifi stuff
+  while (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength)) yield(); //let ESPcore handle wifi stuff
 
 
 }
 
 
 // ############# HTTP REQUEST ################ //
-
 void httpRequest(String path, String body)
 {
   String payload = makeRequest(path, body);
