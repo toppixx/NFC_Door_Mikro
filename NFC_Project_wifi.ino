@@ -22,15 +22,25 @@
 #include <WiFiClient.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager
 #include <ArduinoOTA.h>
-
-#include <SPI.h>
-#include <PN532_SPI.h>
-#include <PN532.h>
-
 #include <ESP8266mDNS.h>
 #include <ESP8266HTTPClient.h>
 
 #include <ESP8266Ping.h>
+
+#include <SPI.h>
+#include <PN532_SPI.h>
+#include <PN532.h>
+#include <NfcAdapter.h>
+#include <NdefMessage.h>
+#include <NdefRecord.h>
+
+
+#include <Wire.h>
+#include <PN532_I2C.h>
+#include <PN532.h>
+#include <NfcAdapter.h>
+
+
 
 void unlock();
 //userbutton reset for connecting to new WIFI
@@ -46,6 +56,8 @@ byte packetBuffer[ UDP_PACKET_SIZE ]; //buffer to hold outgoing packets
 PN532_SPI pn532spi(SPI, D2);
 PN532 nfc(pn532spi);
 
+NfcAdapter nfcAdapter = NfcAdapter(pn532spi);
+
 //WIFI Http stuff
 WiFiClient client;
 HTTPClient http;
@@ -59,6 +71,8 @@ void configModeCallback (WiFiManager *myWiFiManager) {
   Serial.println("AP: " + myWiFiManager->getConfigPortalSSID());
   Serial.println("IP: " + WiFi.softAPIP().toString());
 }
+//small funktion to find string in string https://playground.arduino.cc/Main/FindText
+int find_text(String needle, String haystack);
 
 void setupOTAFirmwareUpdate(void);
 
@@ -99,7 +113,7 @@ void setupOTAFirmwareUpdate(void)
   });
 
   ArduinoOTA.begin();
- 
+
 }
 
 void setup(void) {
@@ -135,13 +149,13 @@ void setup(void) {
   //and goes into a blocking loop awaiting configuration
 
   if (!wifiManager.autoConnect("ESPNFC"))
-   {     
+   {
 
       Serial.println("failed to connect and hit timeout");
       ESP.restart(); //reset and try again, or maybe put it to deep sleep
-     
+
   }
-  
+
   setupOTAFirmwareUpdate();
   nfc.begin();
 
@@ -181,6 +195,7 @@ void loop(void) {
   boolean success;
   uint8_t uidLength;   // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
+  String body;
 
   // Wait for an ISO14443A type cards (Mifare, etc.).  When one is found
   // 'uid' will be populated with the UID, and uidLength will indicate
@@ -189,20 +204,66 @@ void loop(void) {
  /* uint8_t pageBuf[541];
   for(uint16_t k=0;k<540;k++)
     pageBuf[k]=nfc.mifareultralight_ReadPage(k,&pageBuf[k]);
-    
+
     Serial.println(String((char*)(pageBuf)));
 */
-/*    Serial.println("\nScan a NFC tag\n");
-    if (nfc.tagPresent())
+    if (nfcAdapter.tagPresent())
     {
-        NfcTag tag = nfc.read();
-        tag.print();
+        Serial.println("\nScan a NFC tag\n");
+
+        NfcTag tag = nfcAdapter.read();
+        if(tag.hasNdefMessage())
+        {
+          tag.print();
+          if(tag.hasNdefMessage())
+          {
+           NdefMessage ndefMess = tag.getNdefMessage();
+            unsigned int ndefRecCnt = ndefMess.getRecordCount();
+            Serial.printf("number of ndefRecCnt: %d\n\r",ndefRecCnt);
+
+            for(unsigned int k =0;k<ndefRecCnt;k++)
+            {
+              NdefRecord ndefRec = ndefMess.getRecord(k);
+              int ndefPaylen = ndefRec.getPayloadLength();
+              Serial.printf("ndefPaylen: %d\n\r",ndefPaylen);
+              if(ndefPaylen>0)
+              {
+                byte ndefPayBuff[ndefPaylen+1];
+                for(unsigned int k = 0; k<=ndefPaylen;k++)
+                ndefPayBuff[k]=0;
+
+                ndefRec.getPayload(ndefPayBuff);
+                Serial.println(String(((char*)ndefPayBuff)).length());
+
+                if(String(((char*)ndefPayBuff)).length()==ndefPaylen)
+                {
+                  //Serial.println(String((char*)ndefPayBuff));
+                  String handleEntryIdenti = "enDoorHandle:";
+                  int startHandleEntry = find_text(handleEntryIdenti,((char*)ndefPayBuff));
+
+                  Serial.println(String((char*)ndefPayBuff));
+                  Serial.printf("postition of .enDoorHandle: %d\n\r",startHandleEntry);
+
+                  if(startHandleEntry==1)
+                  {
+                      body = String((char*)&ndefPayBuff[startHandleEntry+handleEntryIdenti.length()+1]);
+                      Serial.println(body);
+                      String path = "access/";
+                      httpRequest(path, body);
+                  }
+                }
+                else
+                Serial.println("read of NFCtag was corrupted");
+              }
+              else
+              Serial.println("read of NFCtag was corrupted");
+            }
+          }
+        }
+        else
+        Serial.println("read of NFCtag no entry to read from");
     }
-uncommented bevor commiting this is absolutly not working for now need to implement <NfcAdapter.h>
 
-
-
-    */
   if (success) {
     Serial.println("Found a card!");
     Serial.print("UID Length: ");
@@ -219,10 +280,9 @@ uncommented bevor commiting this is absolutly not working for now need to implem
 
     // wait until the card is taken away
     while (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength)) yield(); //let ESPcore handle wifi stuff
-
+/*
         char buffer[] = "1234567";
-        String body;
-        
+
         if(uidLength==4)
           {
             sprintf(buffer, "%02X:%02X:%02X:%02X",uid[0],uid[1],uid[2],uid[3]);
@@ -230,7 +290,7 @@ uncommented bevor commiting this is absolutly not working for now need to implem
           }
         if(uidLength==7)
            {
-            sprintf(buffer, "%02X:%02X:%02X:%02X%02X:%02X:%02X",uid[0],uid[1],uid[2],uid[3],uid[4],uid[5],uid[6]); 
+            sprintf(buffer, "%02X:%02X:%02X:%02X%02X:%02X:%02X",uid[0],uid[1],uid[2],uid[3],uid[4],uid[5],uid[6]);
             body = String(buffer);
            }
         if(body)
@@ -238,10 +298,11 @@ uncommented bevor commiting this is absolutly not working for now need to implem
             String path = "access/";
             httpRequest(path, body);
           }
+          */
         delay(500); //avoid http POST flooding
-    
+
   Serial.println("\n-----------\n");
-  
+
   //check if button was pressed. that will reset the wifi to default and api mode.
   if (interruptUserButtonFlag) resetToFactoryDefaults();
   }
@@ -267,7 +328,7 @@ String makeRequest(String path, String body)
 {
   http.begin(BASE_URL + path);
   http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
-  body = "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a\n\r------NFCtagHandleBoundary15gabfalsd091590a\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\nA9:CD:85:89\r\n------NFCtagHandleBoundary15gabfalsd091590a--";
+  body = "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a\n\r------NFCtagHandleBoundary15gabfalsd091590a\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\n"+body+"\r\n------NFCtagHandleBoundary15gabfalsd091590a--";
   http.addHeader("content-type", "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a");
   //http.addParameter("multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW", "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\nA9:CD:85:89\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW--");
   Serial.println(http.getString());
@@ -294,7 +355,7 @@ void httpGet(String path)
    http.begin(BASE_URL + path);
   http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
   int httpCode = http.GET();
-  
+
   return;
 }
 
@@ -308,4 +369,17 @@ void resetToFactoryDefaults() {
 void isrResetToFactoryDefaults(void) {
   Serial.println("Resetting to factory defaults");
   interruptUserButtonFlag = true;
+}
+
+
+//find text in string
+
+int find_text(String needle, String haystack) {
+  int foundpos = -1;
+  for (int i = 0; i <= haystack.length() - needle.length(); i++) {
+    if (haystack.substring(i,needle.length()+i) == needle) {
+      foundpos = i;
+    }
+  }
+  return foundpos;
 }
