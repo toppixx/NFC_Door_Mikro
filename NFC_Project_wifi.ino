@@ -23,7 +23,7 @@
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager
 #include <ArduinoOTA.h>
 #include <ESP8266mDNS.h>
-#include <ESP8266HTTPClient.h>
+//#include <ESP8266HTTPClient.h>
 
 #include <ESP8266Ping.h>
 
@@ -40,13 +40,16 @@
 #include <PN532.h>
 #include <NfcAdapter.h>
 
-
+#include <DoorAccesPhases.h>
 
 void unlock();
 //userbutton reset for connecting to new WIFI
 void resetToFactoryDefaults();
-void isrResetToFactoryDefaults(void);
-const byte interruptPin = 0;
+//void isrResetToFactoryDefaults(void);
+const byte resetPin = 0;
+//const byte interruptPin = 0;
+void isrReset();
+
 volatile boolean interruptUserButtonFlag = false;
 
 //const unsigned int remotePort = 1337;
@@ -58,13 +61,15 @@ PN532 nfc(pn532spi);
 
 NfcAdapter nfcAdapter = NfcAdapter(pn532spi);
 
+DoorAccesPhases doorAccesPhases = DoorAccesPhases();
+
 //WIFI Http stuff
 WiFiClient client;
-HTTPClient http;
+//HTTPClient http;
 char strBuffer[16];
-char IP[4] = {192,168,43,173};
+char IP[4] = {192,168,170,58};
 String BASE_URL = "";
-void httpRequest(String path, String body);
+//void httpRequest(String path, String body);
 
 void configModeCallback (WiFiManager *myWiFiManager) {
   Serial.println("Entered config mode");
@@ -119,12 +124,20 @@ void setupOTAFirmwareUpdate(void)
 void setup(void) {
   //setup WIFI stuff
   //setup default Ip Url things
+  for (char i=0; i<10;i++)
+  {
+    delay(700);
+    yield();
+  }
+
   sprintf(strBuffer,"%d.%d.%d.%d",IP[0], IP[1], IP[2], IP[3]);
   BASE_URL = "http://"+String(strBuffer)+"/";
-
+  doorAccesPhases.reset();
   //setup user button to give the posibility to reset wifi stack and do a new connection over the web interface.
-  pinMode(interruptPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(interruptPin), isrResetToFactoryDefaults, FALLING);
+  //pinMode(interruptPin, INPUT_PULLUP);
+  //attachInterrupt(digitalPinToInterrupt(interruptPin), isrResetToFactoryDefaults, FALLING);
+  attachInterrupt(digitalPinToInterrupt(resetPin), isrReset, RISING);
+
   //start WIFI with ssid ESPNFC
   WiFi.hostname("ESPNFC");
 
@@ -181,6 +194,7 @@ void setup(void) {
 
   Serial.println("Ping on Ip to look if server is allive");
   IPAddress ip (IP[0],IP[1],IP[2], IP[3]); // The remote ip to ping
+
   bool ret = Ping.ping(ip);
   if(ret==true)
     Serial.println("Server available");
@@ -188,6 +202,11 @@ void setup(void) {
     Serial.println("Cant reach server");
   Serial.println("Waiting for an ISO14443A card");
   Serial.println("\n-----------\n");
+
+char uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
+unsigned char uidLength = 7;
+doorAccesPhases.Phase1("aef60421984b4b4ba85df07f29bd209c", BASE_URL);
+
 }
 
 void loop(void) {
@@ -240,7 +259,7 @@ void loop(void) {
                   //Serial.println(String((char*)ndefPayBuff));
                   String handleEntryIdenti = "enDoorHandle:";
                   int startHandleEntry = find_text(handleEntryIdenti,((char*)ndefPayBuff));
-
+                  Serial.println("bis hier läufts");
                   Serial.println(String((char*)ndefPayBuff));
                   Serial.printf("postition of .enDoorHandle: %d\n\r",startHandleEntry);
 
@@ -249,7 +268,7 @@ void loop(void) {
                       body = String((char*)&ndefPayBuff[startHandleEntry+handleEntryIdenti.length()+1]);
                       Serial.println(body);
                       String path = "access/";
-                      httpRequest(path, body);
+                      //httpRequest(path, body);
                   }
                 }
                 else
@@ -270,59 +289,59 @@ void loop(void) {
     }
 
   //check if button was pressed. that will reset the wifi to default and api mode.
-  if (interruptUserButtonFlag) resetToFactoryDefaults();
-  else yield(); // PN532 probably timed out waiting for a card.. let's let the ESPcore handle wifi stuff
+  //if (interruptUserButtonFlag) resetToFactoryDefaults();
+  //else yield(); // PN532 probably timed out waiting for a card.. let's let the ESPcore handle wifi stuff
   while (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength)) yield(); //let ESPcore handle wifi stuff
 
 
 }
 
 
-// ############# HTTP REQUEST ################ //
-void httpRequest(String path, String body)
-{
-  String payload = makeRequest(path, body);
+// // ############# HTTP REQUEST ################ //
+// void httpRequest(String path, String body)
+// {
+//   String payload = makeRequest(path, body);
+//
+//   if (!payload) {
+//     return;
+//   }
+//   Serial.println("##[RESULT]## ==> " + payload);
+// }
 
-  if (!payload) {
-    return;
-  }
-  Serial.println("##[RESULT]## ==> " + payload);
-}
-
-String makeRequest(String path, String body)
-{
-  http.begin(BASE_URL + path);
-  http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
-  body = "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a\n\r------NFCtagHandleBoundary15gabfalsd091590a\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\n"+body+"\r\n------NFCtagHandleBoundary15gabfalsd091590a--";
-  http.addHeader("content-type", "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a");
-  //http.addParameter("multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW", "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\nA9:CD:85:89\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW--");
-  Serial.println(http.getString());
-
-  int httpCode = http.POST(body);
-
-  if (httpCode < 0) {
-    Serial.println("request error - " + httpCode);
-    Serial.println(http.errorToString(httpCode));
-
-    return http.errorToString(httpCode);
-
-  }
-  Serial.println(http.getString());
-
-  if (httpCode != HTTP_CODE_OK) {
-    return http.errorToString(httpCode);
-  }
-  return "";
-}
+// String makeRequest(String path, String body)
+// {
+//   http.begin(BASE_URL + path);
+//   http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
+//   body = "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a\n\r------NFCtagHandleBoundary15gabfalsd091590a\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\n"+body+"\r\n------NFCtagHandleBoundary15gabfalsd091590a--";
+//   http.addHeader("content-type", "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a");
+//   //http.addParameter("multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW", "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\nA9:CD:85:89\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW--");
+//   Serial.println(http.getString());
+//
+//   int httpCode = http.POST(body);
+//
+//   if (httpCode < 0) {
+//     Serial.println("request error - " + httpCode);
+//     Serial.println(http.errorToString(httpCode));
+//
+//     return http.errorToString(httpCode);
+//
+//   }
+//   Serial.println(http.getString());
+//
+//   if (httpCode != HTTP_CODE_OK) {
+//     return http.errorToString(httpCode);
+//   }
+//   return "";
+// }
 //###############GET REQUEST#############
-void httpGet(String path)
-{
-   http.begin(BASE_URL + path);
-  http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
-  int httpCode = http.GET();
-
-  return;
-}
+// void httpGet(String path)
+// {
+//    http.begin(BASE_URL + path);
+//   http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
+//   int httpCode = http.GET();
+//
+//   return;
+// }
 
 //code from https://github.com/tzapu/WiFiManager/issues/142
 void resetToFactoryDefaults() {
@@ -332,10 +351,20 @@ void resetToFactoryDefaults() {
 }
 
 void isrResetToFactoryDefaults(void) {
-  Serial.println("Resetting to factory defaults");
-  interruptUserButtonFlag = true;
+  //Serial.println("Resetting to factory defaults");
+  //interruptUserButtonFlag = true;
 }
-
+void isrReset(void)
+{
+  //GPIO0 need to be HIGH and GPIO15 need to be LOW
+  //pinMode(16, OUTPUT);
+  //digitalWrite(16, LOW); // make GPIO0 output low
+  //pinMode(16, OUTPUT);
+  //delay(1);
+  //digitalWrite(16, HIGH); // make GPIO0 output low
+  //Serial.println("reseting");
+//  ESP.restart();
+}
 
 //find text in string
 
