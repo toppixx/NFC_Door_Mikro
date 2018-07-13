@@ -170,47 +170,47 @@ public:
         delayMicroseconds(s32_MicroSeconds);
     }
 
-    // Defines if a digital processor pin is used as input or output
-    // u8_Mode = INPUT or OUTPUT
-    // If you compile on Visual Studio see WinDefines.h
-    static inline void SetPinMode(byte u8_Pin, byte u8_Mode)
-    {
-        pinMode(u8_Pin, u8_Mode);
-    }
-
-    // Sets a digital processor pin high or low.
-    // u8_Status = HIGH or LOW
-    // If you compile on Visual Studio see WinDefines.h
-    static inline void WritePin(byte u8_Pin, byte u8_Status)
-    {
-        digitalWrite(u8_Pin, u8_Status);
-    }
-
-    // reads the current state of a digital processor pin.
-    // returns HIGH or LOW
-    // If you compile on Visual Studio see WinDefines.h
-    static inline byte ReadPin(byte u8_Pin)
-    {
-        return digitalRead(u8_Pin);
-    }
+    // // Defines if a digital processor pin is used as input or output
+    // // u8_Mode = INPUT or OUTPUT
+    // // If you compile on Visual Studio see WinDefines.h
+    // static inline void SetPinMode(byte u8_Pin, byte u8_Mode)
+    // {
+    //     pinMode(u8_Pin, u8_Mode);
+    // }
+    //
+    // // Sets a digital processor pin high or low.
+    // // u8_Status = HIGH or LOW
+    // // If you compile on Visual Studio see WinDefines.h
+    // static inline void WritePin(byte u8_Pin, byte u8_Status)
+    // {
+    //     digitalWrite(u8_Pin, u8_Status);
+    // }
+    //
+    // // reads the current state of a digital processor pin.
+    // // returns HIGH or LOW
+    // // If you compile on Visual Studio see WinDefines.h
+    // static inline byte ReadPin(byte u8_Pin)
+    // {
+    //     return digitalRead(u8_Pin);
+    // }
 
     static uint64_t GetMillis64();
-    static void     Print(const char*   s8_Text,  const char* s8_LF=NULL);
-    static void     PrintDec  (int      s32_Data, const char* s8_LF=NULL);
-    static void     PrintHex8 (byte     u8_Data,  const char* s8_LF=NULL);
-    static void     PrintHex16(uint16_t u16_Data, const char* s8_LF=NULL);
-    static void     PrintHex32(uint32_t u32_Data, const char* s8_LF=NULL);
-    static void     PrintHexBuf(const byte* u8_Data, const uint32_t u32_DataLen, const char* s8_LF=NULL, int s32_Brace1=-1, int S32_Brace2=-1);
-    static void     PrintInterval(uint64_t u64_Time, const char* s8_LF=NULL);
-    static void     GenerateRandom(byte* u8_Random, int s32_Length);
-    static void     RotateBlockLeft(byte* u8_Out, const byte* u8_In, int s32_Length);
-    static void     BitShiftLeft(uint8_t* u8_Data, int s32_Length);
-    static void     XorDataBlock(byte* u8_Out,  const byte* u8_In, const byte* u8_Xor, int s32_Length);
-    static void     XorDataBlock(byte* u8_Data, const byte* u8_Xor, int s32_Length);
-    static uint16_t CalcCrc16(const byte* u8_Data,  int s32_Length);
-    static uint32_t CalcCrc32(const byte* u8_Data1, int s32_Length1, const byte* u8_Data2=NULL, int s32_Length2=0);
-    static int      strnicmp(const char* str1, const char* str2, uint32_t u32_MaxCount);
-    static int      stricmp (const char* str1, const char* str2);
+    // static void     Print(const char*   s8_Text,  const char* s8_LF=NULL);
+    // static void     PrintDec  (int      s32_Data, const char* s8_LF=NULL);
+    // static void     PrintHex8 (byte     u8_Data,  const char* s8_LF=NULL);
+    // static void     PrintHex16(uint16_t u16_Data, const char* s8_LF=NULL);
+    // static void     PrintHex32(uint32_t u32_Data, const char* s8_LF=NULL);
+    // static void     PrintHexBuf(const byte* u8_Data, const uint32_t u32_DataLen, const char* s8_LF=NULL, int s32_Brace1=-1, int S32_Brace2=-1);
+    // static void     PrintInterval(uint64_t u64_Time, const char* s8_LF=NULL);
+    // static void     GenerateRandom(byte* u8_Random, int s32_Length);
+    // static void     RotateBlockLeft(byte* u8_Out, const byte* u8_In, int s32_Length);
+    // static void     BitShiftLeft(uint8_t* u8_Data, int s32_Length);
+    // static void     XorDataBlock(byte* u8_Out,  const byte* u8_In, const byte* u8_Xor, int s32_Length);
+    // static void     XorDataBlock(byte* u8_Data, const byte* u8_Xor, int s32_Length);
+    // static uint16_t CalcCrc16(const byte* u8_Data,  int s32_Length);
+    // static uint32_t CalcCrc32(const byte* u8_Data1, int s32_Length1, const byte* u8_Data2=NULL, int s32_Length2=0);
+    // static int      strnicmp(const char* str1, const char* str2, uint32_t u32_MaxCount);
+    // static int      stricmp (const char* str1, const char* str2);
 
 private:
     static uint32_t CalcCrc32(const byte* u8_Data, int s32_Length, uint32_t u32_Crc);

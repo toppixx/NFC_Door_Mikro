@@ -1,24 +1,44 @@
 #include "DoorAccesPhases.h"
-#include "AES.h"
-#include "sha256.h"
+//#include "AES.h"
+#include "Crypto.h"
 #include "Utils.h"
 #include <ESP8266HTTPClient.h>
 #include "ArduinoJson.h"
 DoorAccesPhases::DoorAccesPhases()
 {
-  char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-  char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-  nfcUUID = "";
-  nfcUDID="";
-  memcpy(nfcAESIV, freeEr16, 16);
-  nfcDataLoad ="";
-
-  memcpy(AESIV, freeEr16, 16);
-  TDAT="";
+  memcpy(UDID, freeEr32, 33);
+  memcpy(nfcUUID, freeEr32, 33);
+  memcpy(nfcAESEncryptionKey, freeEr16, 17);
+  memcpy(nfcAESIV, freeEr16, 17);
+  memcpy(nfcDataLoad, freeEr32, 33);
+  httpBaseURL = "";
+  memcpy(httpTDAT, freeEr32, 33);
+  memcpy(httpAESIV, freeEr16, 17);
+  memcpy(httpAESEncryptionKey, freeEr16, 17);
 }
 
 DoorAccesPhases::~DoorAccesPhases(){}
+
+void DoorAccesPhases::init(char* udid)
+{
+  char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  if(String(udid).length()<=32)
+    memcpy(UDID, udid, String(udid).length()+1);
+  else
+    Serial.println("udid wrong length");
+  memcpy(nfcUUID, freeEr32, 33);
+  memcpy(nfcAESEncryptionKey, freeEr16, 17);
+  memcpy(nfcAESIV, freeEr16, 17);
+  memcpy(nfcDataLoad, freeEr32, 33);
+  httpBaseURL = "";
+  memcpy(httpTDAT, freeEr32, 33);
+  memcpy(httpAESIV, freeEr16, 17);
+  memcpy(httpAESEncryptionKey, freeEr16, 17);
+}
 
 /*for the future not implemented at server yet*/
 // unsigned char rndsha256Length = 32;
@@ -38,72 +58,132 @@ DoorAccesPhases::~DoorAccesPhases(){}
 // memcpy(sha256UUIDBuffer,sha256Hasher.resultHmac(), sha256UUIDLength);
 //sha256UUIDBuffer need to be send to server with rndsha256Buffer
 
-String DoorAccesPhases::Phase1(String nfcUUID, String baseURL)
+bool DoorAccesPhases::Phase1(char* uuid, String baseURL)
 {
-  //Serial.println("rechaed phase 1");
-  bool retval = false;
-  //Serial.println("rechaed phase 1 _ 2");
-  String path = "NFCDoorAcContPhase1/";
-  //Serial.println("goind to hexDig");
-  String hexDigStr =  getRnd32hexDigString();
-  //Serial.println("headerTyping");
-  String headerType = "content-type";
-  //Serial.println("adding Strings");
-  String headerStr = "multipart/form-data; boundary=----" + hexDigStr +"";
-  //Serial.println("hi");
-  String body = "multipart/form-data; boundary=----"+hexDigStr+"\n\r------"+hexDigStr+"\r\nContent-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+nfcUUID+"\r\n------"+hexDigStr+"--";
-  //Serial.println("hi22");
-  //Serial.println(body);
+  httpBaseURL = baseURL;
 
+  if(String(uuid).length()<=32)
+    memcpy(nfcUUID, uuid, String(uuid).length());
+  else
+  {
+    Serial.println("uuid to long");
+    return false;
+  }
+  String path = "NFCDoorAcContPhase1/";
+  String hexDigStr =  getRnd32hexDigString();
+  String headerType = "content-type";
+  String boundary = "--------------------------" + hexDigStr;
+  String headerStr = "multipart/form-data; boundary=" + boundary;
+  //String body = "multipart/form-data; boundary=----"+hexDigStr+"\n\r------"+hexDigStr+"\r\nContent-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+nfcUUID+"\r\n------"+hexDigStr+"--";
+  String body  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+nfcUUID+"\r\n"+"--"+boundary+"--\r\n";
   HTTPClient http;
   http.begin(baseURL + path);
   http.addHeader(headerType, headerStr);
   int httpCode = http.POST(body);
 
-  if (httpCode < 0) {
+  if (httpCode < 0)
+  {
     Serial.println("request error - " + httpCode);
     Serial.println(http.errorToString(httpCode));
-
-    }
-    //void collectHeaders(const char* headerKeys[], const size_t headerKeysCount);
-    //String header(const char* name); // get request header value by name
-    //String headerVal = http.header("Member Key: returnToken");
-    //JavaScript Object Notation: application/json
-
-
-    //Serial.println(headerVal);
-    Serial.println("get String()");
+    return false;
+  }
+  else
+  {
+    //Serial.println("get String()");
     String httpRespo = http.getString();
 
     //Serial.println(httpRespo);
-    StaticJsonBuffer<300> jsonBuffer;
-    JsonObject& jsonObject = jsonBuffer.parseObject(httpRespo);
+    Serial.println("going to Json");
+    if(httpRespo.length()<400)
+    {
+      StaticJsonBuffer<400> jsonBuffer;
+      JsonObject& jsonObject = jsonBuffer.parseObject(httpRespo);
+      Serial.println("Jsoned");
 
-    if (!jsonObject.success()) {
+      if (!jsonObject.success())
+      {
         Serial.println("parseObject() failed");
-    } else {
-            const char* tdatArr = jsonObject["returnToken"];
-             Serial.println(tdatArr);
-             TDAT = String(tdatArr);
+        return false;
+      }
+      else
+      {
+        const char* tdatArr = jsonObject["returnToken"];
+        //Serial.println(tdatArr);
+        Serial.println("get returnToken");
+        if (tdatArr)
+        {
+          if((String(tdatArr).length()) ==256)
+            memcpy(httpTDAT, tdatArr, String(tdatArr).length()+1);
+          else
+            Serial.println("TDAT wrong size");
+          }
+        else
+        Serial.println("couldnt get returnToken");
+      }
+      }
+      else
+      {
+      Serial.println("jsonBuffer to small");
+      return false;
     }
-    Serial.println("ended Phase1");
-    return ;
+    Serial.println("going to print repo");
+    Serial.println(httpRespo);
+    return true;
+  }
 }
 bool DoorAccesPhases::Phase2()
 {
-  bool retval = false;
-  unsigned char aesIVsha256length = 32;
-  char aesIVsha256Buffer[33] ="";
-  getRndSha256(aesIVsha256Buffer, aesIVsha256length);
-  char buffer[10]=" ";
-  Serial.print("asdf");
-  for(char i=0;i<aesIVsha256length;i++)
+  String path = "NFCDoorAcContPhase2/";
+  unsigned char sha256length = 32;
+  byte sha256Buffer[65] ="";
+  char keyHash[65] ="";
+  unsigned int plainUDID_TDATlength = String(UDID).length()+String(httpTDAT).length();
+  char plainUDID_TDATbuffer[plainUDID_TDATlength+1];
+  memcpy(&plainUDID_TDATbuffer[0], httpTDAT, String(httpTDAT).length());
+  memcpy(&plainUDID_TDATbuffer[String(httpTDAT).length()], UDID,String(UDID).length()+1);
+
+
+  // Serial.println("own UDID");
+  // Serial.println(UDID);
+  // Serial.println("\n\rplainUDID_TDDATbuffer");
+  // Serial.println(plainUDID_TDATbuffer);
+
+  sha256Calc(plainUDID_TDATbuffer, sha256Buffer, sha256length);
+
+  Serial.println("looped output sha256Buffer HEX");
+  for (unsigned int i = 0 ; i<32; i++)
+      sprintf(&keyHash[i*2], "%02X",sha256Buffer[i]);
+
+  Serial.println("\n\r");
+  Serial.println("println keyHash");
+
+  Serial.println(keyHash);
+
+  HTTPClient http;
+  String headerType = "content-type";
+  String hexDigStr =  getRnd32hexDigString();
+  String boundary = "--------------------------" + hexDigStr;
+  String headerStr = "multipart/form-data; boundary=" + boundary;
+  String content1  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+String(nfcUUID)+"\r\n";
+  String content2  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"keyHash\"\r\n\r\n"+String(keyHash)+"\r\n"+"--"+boundary+"--\r\n";
+
+  String body = content1 +content2;
+
+
+  http.begin(httpBaseURL + path);
+  http.addHeader(headerType, headerStr);
+  int httpCode = http.POST(body);
+
+  if (httpCode < 0)
   {
-     sprintf(buffer," %c ",aesIVsha256Buffer[i]);
-     Serial.print(buffer);
-   }
-     Serial.println("");
-  return retval;
+    Serial.println("request error - " + httpCode);
+    Serial.println(http.errorToString(httpCode));
+    return false;
+  }
+
+    String httpRespo = http.getString();
+    Serial.println(httpRespo);
+  return true;
 }
 bool DoorAccesPhases::Phase3()
 {
@@ -114,46 +194,61 @@ bool DoorAccesPhases::Phase3()
 
 void DoorAccesPhases::reset()
 {
-  char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-  char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-
-  memcpy(nfcUUID, freeEr32, 32);
-  memcpy(nfcUDID, freeEr32, 32);
-  memcpy(nfcAESEncryptionKey, freeEr16, 16);
-  memcpy(nfcAESIV, freeEr16, 16);
-  memcpy(nfcDataLoad, freeEr32, 32);
-  memcpy(AESIV, freeEr16, 16);
-  memcpy(TDAT, freeEr32, 32);
+  char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  memcpy(UDID, freeEr32, 33);
+  memcpy(nfcUUID, freeEr32, 33);
+  memcpy(nfcAESEncryptionKey, freeEr16, 17);
+  memcpy(nfcAESIV, freeEr16, 17);
+  memcpy(nfcDataLoad, freeEr32, 33);
+  httpBaseURL = "";
+  memcpy(httpTDAT, freeEr32, 33);
+  memcpy(httpAESIV, freeEr16, 17);
+  memcpy(httpAESEncryptionKey, freeEr16, 17);
 }
 
-bool DoorAccesPhases::getRndSha256(char* charArrOut, unsigned char charArrOutLength) //last value should be guees...32 XD
+bool DoorAccesPhases::sha256Calc(char* strInBuf, byte* byteOutBuf, byte byteOutLen)
+{
+  if(byteOutLen>=32)
+  {
+    SHA256 shaHaschen = SHA256();
+    shaHaschen.doUpdate(strInBuf);
+    shaHaschen.doFinal(byteOutBuf);
+    return true;
+  }
+  else
+  Serial.println("byteOutLen should be >32");
+  return false;
+}
+
+bool DoorAccesPhases::getRndSha256(byte* ArrOut, byte ArrOutLength) //last value should be guees...32 XD
 {
   //Create a long rare value
-  if (charArrOutLength<=32)
+  if (ArrOutLength<=32)
   {
-    if(charArrOutLength !=32){Serial.println("Are you shure you want to recieve a hash with a shorter length then 32 Bytes /256 bits? well if you do its up to you. but if you dont know what you are doing take 32 bytes");}
+    if(ArrOutLength !=32){Serial.println("Are you shure you want to recieve a hash with a shorter length then 32 Bytes /256 bits? well if you do its up to you. but if you dont know what you are doing take 32 bytes");}
 
     int timeDisturbedStrlength = 70;
     char timeDisturbedStr[70] = "";
     long long unsigned int u64_StartTick = Utils::GetMillis64(); //64 bit
     long long unsigned int u64_DisturbedTick = (u64_StartTick*3203431780337)%572199783953491*3203431780337;
     sprintf(timeDisturbedStr,"5l135hjlkal%lldkta52ljkjs0925ja1%lld", u64_StartTick, u64_DisturbedTick);
-    Sha256Class sha256Hasher = Sha256Class();
-    sha256Hasher.init();
-    sha256Hasher.initHmac((const unsigned char*) timeDisturbedStr, timeDisturbedStrlength);
-    memcpy(charArrOut,sha256Hasher.resultHmac(), charArrOutLength);
+
+    sha256Calc(timeDisturbedStr, ArrOut, ArrOutLength);
     return true;
   }
+  Serial.println("byteArrOutLength should be >?32");
+
   return false;
 }
 //bool DoorAccesPhases::getRnd32hexDigString(char* charArrOut, unsigned char charArrOutLength) //last value should be guees...32 XD
 String DoorAccesPhases::getRnd32hexDigString()
 {
-  unsigned char hexDig32length = 32;
-  char hexDig32Buffer[33] ="";
+  byte hexDig32length = 32;
+  byte hexDig32Buffer[33] ="";
   getRndSha256(hexDig32Buffer, hexDig32length);
   unsigned char buffer = 0;
-  Serial.println(hexDig32Buffer);
+  //Serial.println(hexDig32Buffer);
 
   //if (charArrOutLength<=32)
   //{
@@ -206,6 +301,17 @@ String makeRequest(String path, String headerType, String header, String body)
   return "";
 }
 
+String DoorAccesPhases::byteToHexString(char* charArr, unsigned char charArrLen)
+{
+  char chrBuff[3];
+  String strBuff="";
+  for(unsigned int i = 0 ; i<charArrLen; i++)
+  {
+     sprintf(chrBuff, "%02X", charArr[i]);
+     strBuff += String(chrBuff);
+  }
+  return strBuff;
+}
 // bool door_acces_controll_phase_1(String UUID)
 // {
 //   String path = "/NFCDoorAcContPhase1/";

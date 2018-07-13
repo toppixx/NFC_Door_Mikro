@@ -42,6 +42,7 @@
 
 #include <DoorAccesPhases.h>
 
+char ownUDID[] = "d78070d1e4544b6b896a5e32c1fed258";
 void unlock();
 //userbutton reset for connecting to new WIFI
 void resetToFactoryDefaults();
@@ -126,7 +127,7 @@ void setup(void) {
   //setup default Ip Url things
   for (char i=0; i<10;i++)
   {
-    delay(700);
+    delay(1000);
     yield();
   }
 
@@ -203,15 +204,14 @@ void setup(void) {
   Serial.println("Waiting for an ISO14443A card");
   Serial.println("\n-----------\n");
 
-char uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
-unsigned char uidLength = 7;
-doorAccesPhases.Phase1("aef60421984b4b4ba85df07f29bd209c", BASE_URL);
+  doorAccesPhases.init(ownUDID);
+  doorAccesPhases.Phase1("965d157659ce4ad8b1a843bea38085d0", BASE_URL);
+  doorAccesPhases.Phase2();
 
 }
 
 void loop(void) {
 
-  boolean success;
   uint8_t uidLength;   // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
   String body;
@@ -219,7 +219,7 @@ void loop(void) {
   // Wait for an ISO14443A type cards (Mifare, etc.).  When one is found
   // 'uid' will be populated with the UID, and uidLength will indicate
   // if the uid is 4 bytes (Mifare Classic) or 7 bytes (Mifare Ultralight)
-  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength);
+  //success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength);
  /* uint8_t pageBuf[541];
   for(uint16_t k=0;k<540;k++)
     pageBuf[k]=nfc.mifareultralight_ReadPage(k,&pageBuf[k]);
@@ -243,7 +243,7 @@ void loop(void) {
             for(unsigned int k =0;k<ndefRecCnt;k++)
             {
               NdefRecord ndefRec = ndefMess.getRecord(k);
-              int ndefPaylen = ndefRec.getPayloadLength();
+              unsigned int ndefPaylen = ndefRec.getPayloadLength();
               Serial.printf("ndefPaylen: %d\n\r",ndefPaylen);
               if(ndefPaylen>0)
               {
