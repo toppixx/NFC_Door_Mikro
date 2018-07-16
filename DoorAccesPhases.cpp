@@ -260,15 +260,15 @@ bool DoorAccesPhases::Phase2()
                 //Serial.println((char*)cypheredText);
 
                 uint8_t * keyEncrypt = UDID;
-                char * udid = "cKeycKeycKeycKey";
-                Serial.println("strlen(udid)");
-                Serial.println(strlen(udid));
-                memcpy(keyEncrypt, udid, strlen(udid));
+                //char * udid = "cKeycKeycKeycKey";
+                // Serial.println("strlen(udid)");
+                // Serial.println(strlen(udid));
+                // memcpy(keyEncrypt, udid, strlen(udid));
                 Serial.println("cypher");
-                printBlock(cypher, 16);
+                printBlock(cypher, cypherLen);
                 //int decodedSize = cpyheredTextLen;
                 //int decryptedSize = decodedSize - AES_KEY_LENGTH - SHA256HMAC_SIZE;
-                char decrypted[16];
+                char decrypted[cypherLen+1];
                 //int decodedSize = ivEncryptedHmacSize;
                 //uint8_t* decoded = ivEncryptedHmac;
                 Serial.println("keyEncrypt encryption Key");
@@ -278,18 +278,21 @@ bool DoorAccesPhases::Phase2()
                 //Serial.println((char*)httpAESIV);
                 printBlock(httpAESIV, 16);
                 Serial.println("cypher");
-                printBlock(cypher, 16);
+                printBlock(cypher, cypherLen);
                 AES aesDecryptor(keyEncrypt, httpAESIV, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
 
 
                 //Serial.println(strlen(cypher));
-                aesDecryptor.process((uint8_t*)cypher, (uint8_t*)decrypted, AES_KEY_LENGTH);
+                aesDecryptor.process((uint8_t*)cypher, (uint8_t*)decrypted, cypherLen);
 
                 Serial.printf("Decrypted Packet HEX (%d bytes)", AES_KEY_LENGTH);
                 printBlock((uint8_t*)decrypted, AES_KEY_LENGTH);
 
                 Serial.printf("Decrypted Packet (%d bytes):\n",  AES_KEY_LENGTH);
                 Serial.println(decrypted);
+                memcpy(nfcAESEncryptionKey, decrypted, nfcAESEncryptionKeyLen-1);
+
+
 
               }
               else
@@ -297,13 +300,6 @@ bool DoorAccesPhases::Phase2()
                 Serial.println("converting cypher failed");
                 return false;
               }
-              /*starting decryption*/
-              // uint8_t * keyEncrypt = UDID
-
-
-              Serial.println("should be");
-              Serial.println("32 48 4d 79 62 79 54 78 78 56 48 46 6e 36 45 58");
-              Serial.println("last was: B6 27 C7 94 44 27 17 E7 7E F8 EC 46 40 C9 82 3E");
             }
             else
             {
