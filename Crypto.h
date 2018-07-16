@@ -1,12 +1,12 @@
 /**
  * An extremely minimal crypto library for Arduino devices.
- * 
- * The SHA256 and AES implementations are derived from axTLS 
+ *
+ * The SHA256 and AES implementations are derived from axTLS
  * (http://axtls.sourceforge.net/), Copyright (c) 2008, Cameron Rich.
- * 
+ *
  * Ported and refactored by Chris Ellis 2016.
  * pkcs7 padding routines added by Mike Killewald Nov 26, 2017 (adopted from https://github.com/spaniakos/AES).
- * 
+ *
  */
 
 #ifndef CRYPTO_h
@@ -42,7 +42,7 @@ class SHA256
         void doUpdate(const char *msg, unsigned int len) { doUpdate((byte*) msg, len); }
         void doUpdate(const char *msg) { doUpdate((byte*) msg, strlen(msg)); }
         /**
-         * Compute the final hash and store it in [digest], digest must be 
+         * Compute the final hash and store it in [digest], digest must be
          * at least 32 bytes
          */
         void doFinal(byte *digest);
@@ -67,7 +67,7 @@ class SHA256HMAC
 {
     public:
         /**
-         * Compute a SHA256 HMAC with the given [key] key of [length] bytes 
+         * Compute a SHA256 HMAC with the given [key] key of [length] bytes
          * for authenticity
          */
         SHA256HMAC(const byte *key, unsigned int keyLen);
@@ -78,7 +78,7 @@ class SHA256HMAC
         void doUpdate(const char *msg, unsigned int len) { doUpdate((byte*) msg, len); }
         void doUpdate(const char *msg) { doUpdate((byte*) msg, strlen(msg)); }
         /**
-         * Compute the final hash and store it in [digest], digest must be 
+         * Compute the final hash and store it in [digest], digest must be
          * at least 32 bytes
          */
         void doFinal(byte *digest);
@@ -109,31 +109,31 @@ class AES
             CIPHER_ENCRYPT = 0x01,
             CIPHER_DECRYPT = 0x02
         } CIPHER_MODE;
-        
+
         /**
          * Create this cipher instance in either encrypt or decrypt mode
-         * 
-         * Use the given [key] which must be 16 bytes long for AES 128 and 
+         *
+         * Use the given [key] which must be 16 bytes long for AES 128 and
          *  32 bytes for AES 256
-         * 
+         *
          * Use the given [iv] initialistion vection which must be 16 bytes long
-         * 
+         *
          * Use the either AES 128 or AES 256 as specified by [mode]
-         * 
+         *
          * Either encrypt or decrypt as specified by [cipherMode]
          */
         AES(const uint8_t *key, const uint8_t *iv, AES_MODE mode, CIPHER_MODE cipherMode);
-        
+
         /**
          * Either encrypt or decrypt [in] and store into [out] for [length] bytes, applying no padding
-         * 
+         *
          * Note: the length must be a multiple of 16 bytes
          */
         void processNoPad(const uint8_t *in, uint8_t *out, int length);
-        
+
         /**
          * Either encrypt or decrypt [in] and store into [out] for [length] bytes, applying padding as needed
-         * 
+         *
          * Note: the length must be a multiple of 16 bytes
          */
         void process(const uint8_t *in, uint8_t *out, int length);
@@ -145,14 +145,14 @@ class AES
          * thus, the size of the ciphertext.
          */
         int getSize();
-    
+
         /** Setter method for size
          *
          * This function sets the size of the plaintext+pad
          *
          */
         void setSize(int size);
-    
+
         /** Calculates the size of the plaintext and the padding.
          *
          * Calculates the size of the plaintext with the size of the
@@ -162,7 +162,7 @@ class AES
          * @return an int the size of the plaintext plus the padding
          */
         int calcSizeAndPad(int in_size);
-    
+
         /** Pads the plaintext
          *
          * This function pads the plaintext and returns an char array with the
@@ -174,7 +174,7 @@ class AES
          * @return no return, The padded plaintext is stored in the out pointer.
          */
         void padPlaintext(const uint8_t* in, uint8_t* out);
-    
+
         /** Check the if the padding is correct.
          *
          * This functions checks the padding of the plaintext.

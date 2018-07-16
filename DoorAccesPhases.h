@@ -26,6 +26,10 @@ class DoorAccesPhases {
         String byteToHexString(char* charArr, unsigned char charArrLen);
         //String getRndSha256(); //last value should be guees...32 XD
         String getRnd32hexDigString(); //last value should be guees...32 XD
+        char convertCharToHex(char ch);
+        bool convertStringToByteArr(const char* input, byte* byteArrOutBuff, byte byteArrOutLength);
+        void printBlock(uint8_t* block, int length);
+
         // char nfcUUID[32];
         // char nfcUDID[32];
         // char nfcAESEncryptionKey[16];
@@ -33,14 +37,22 @@ class DoorAccesPhases {
         // char nfcDataLoad[32];
         // char AESIV[16];
         // char TDAT[32];
-        char UDID[33];
-        char nfcUUID[33];
-        char nfcAESEncryptionKey[17];
-        char nfcAESIV[17];
-        char nfcDataLoad[33];
+        #define UDIDLen 17
+        uint8_t UDID[UDIDLen];
+        #define nfcUUIDLen 33
+        char nfcUUID[nfcUUIDLen];
+        #define nfcAESEncryptionKeyLen 17
+        char nfcAESEncryptionKey[nfcAESEncryptionKeyLen];
+        #define nfcAESIVLen 17
+        byte nfcAESIV[nfcAESIVLen];
+        #define nfcDataLoadLen 33
+        byte nfcDataLoad[nfcDataLoadLen];
         String httpBaseURL;
-        char httpTDAT[257];
-        char httpAESIV[17];
-        char httpAESEncryptionKey[17];
+        #define httpTDATLen 33
+        uint8_t httpTDAT[httpTDATLen];
+        #define httpAESIVLen 17
+        uint8_t httpAESIV[httpAESIVLen];
+        #define httpAESEncryptionKeyLen 17
+        uint8_t httpAESEncryptionKey[httpAESEncryptionKeyLen];
 };
 #endif

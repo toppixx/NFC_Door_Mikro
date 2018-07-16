@@ -34,7 +34,6 @@
 #include <NdefMessage.h>
 #include <NdefRecord.h>
 
-
 #include <Wire.h>
 #include <PN532_I2C.h>
 #include <PN532.h>
@@ -42,7 +41,7 @@
 
 #include <DoorAccesPhases.h>
 
-char ownUDID[] = "d78070d1e4544b6b896a5e32c1fed258";
+char ownUDID[] = "97BCGxZpbYklBnPO";
 void unlock();
 //userbutton reset for connecting to new WIFI
 void resetToFactoryDefaults();
@@ -128,11 +127,14 @@ void setup(void) {
   for (char i=0; i<10;i++)
   {
     delay(1000);
-    yield();
   }
+  // while (Serial.available() == 0)
+  // {
+  //   yield();
+  // }
 
   sprintf(strBuffer,"%d.%d.%d.%d",IP[0], IP[1], IP[2], IP[3]);
-  BASE_URL = "http://"+String(strBuffer)+"/";
+  BASE_URL = "http://"+String(strBuffer)+":8000/";
   doorAccesPhases.reset();
   //setup user button to give the posibility to reset wifi stack and do a new connection over the web interface.
   //pinMode(interruptPin, INPUT_PULLUP);
@@ -205,7 +207,7 @@ void setup(void) {
   Serial.println("\n-----------\n");
 
   doorAccesPhases.init(ownUDID);
-  doorAccesPhases.Phase1("965d157659ce4ad8b1a843bea38085d0", BASE_URL);
+  doorAccesPhases.Phase1("99qIN0M", BASE_URL);
   doorAccesPhases.Phase2();
 
 }

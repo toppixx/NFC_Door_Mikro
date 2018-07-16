@@ -1,12 +1,12 @@
 /**
  * An extremely minimal crypto library for Arduino devices.
- * 
- * The SHA256 and AES implementations are derived from axTLS 
+ *
+ * The SHA256 and AES implementations are derived from axTLS
  * (http://axtls.sourceforge.net/), Copyright (c) 2008, Cameron Rich.
- * 
+ *
  * Ported and refactored by Chris Ellis 2016.
  * pkcs7 padding routines added by Mike Killewald Nov 26, 2017 (adopted from https://github.com/spaniakos/AES).
- * 
+ *
  */
 
 #include <Crypto.h>
@@ -22,7 +22,7 @@ inline static uint16_t crypto_htons(uint16_t x)
 {
     return x;
 }
- 
+
 inline static uint16_t crypto_ntohs(uint16_t x)
 {
     return x;
@@ -43,15 +43,15 @@ inline static uint32_t crypto_ntohl(uint32_t x)
 inline static uint16_t crypto_htons(uint16_t x)
 {
     return (
-            ((x & 0xff)   << 8) | 
+            ((x & 0xff)   << 8) |
             ((x & 0xff00) >> 8)
            );
 }
- 
+
 inline static uint16_t crypto_ntohs(uint16_t x)
 {
     return (
-            ((x & 0xff)   << 8) | 
+            ((x & 0xff)   << 8) |
             ((x & 0xff00) >> 8)
            );
 }
@@ -59,9 +59,9 @@ inline static uint16_t crypto_ntohs(uint16_t x)
 inline static uint32_t crypto_htonl(uint32_t x)
 {
     return (
-            ((x & 0xff)         << 24) | 
-            ((x & 0xff00)       << 8)  | 
-            ((x & 0xff0000UL)   >> 8)  | 
+            ((x & 0xff)         << 24) |
+            ((x & 0xff00)       << 8)  |
+            ((x & 0xff0000UL)   >> 8)  |
             ((x & 0xff000000UL) >> 24)
            );
 }
@@ -69,9 +69,9 @@ inline static uint32_t crypto_htonl(uint32_t x)
 inline static uint32_t crypto_ntohl(uint32_t x)
 {
     return (
-            ((x & 0xff)         << 24) | 
-            ((x & 0xff00)       << 8)  | 
-            ((x & 0xff0000UL)   >> 8)  | 
+            ((x & 0xff)         << 24) |
+            ((x & 0xff00)       << 8)  |
+            ((x & 0xff0000UL)   >> 8)  |
             ((x & 0xff000000UL) >> 24)
            );
 }
@@ -345,7 +345,7 @@ bool SHA256::matches(const byte *expected)
 #define rot2(x) (((x) << 16) | ((x) >> 16))
 #define rot3(x) (((x) <<  8) | ((x) >> 24))
 
-/* 
+/*
  * This cute trick does 4 'mul by two' at once.  Stolen from
  * Dr B. R. Gladman <brg@gladman.uk.net> but I'm sure the u-(u>>7) is
  * a standard graphics trick
@@ -417,7 +417,7 @@ static const uint8_t aes_sbox[256] =
 /*
  * AES is-box
  */
-static const uint8_t aes_isbox[256] = 
+static const uint8_t aes_isbox[256] =
 {
     0x52,0x09,0x6a,0xd5,0x30,0x36,0xa5,0x38,
     0xbf,0x40,0xa3,0x9e,0x81,0xf3,0xd7,0xfb,
@@ -480,7 +480,7 @@ void AES::encrypt(uint32_t *data)
     uint32_t tmp[4];
     uint32_t tmp1, old_a0, a0, a1, a2, a3, row;
     int curr_rnd;
-    int rounds = _rounds; 
+    int rounds = _rounds;
     const uint32_t *k = _ks;
 
     /* Pre-round key addition */
@@ -495,7 +495,7 @@ void AES::encrypt(uint32_t *data)
         {
             a0 = (uint32_t)aes_sbox[(data[row%4]>>24)&0xFF];
             a1 = (uint32_t)aes_sbox[(data[(row+1)%4]>>16)&0xFF];
-            a2 = (uint32_t)aes_sbox[(data[(row+2)%4]>>8)&0xFF]; 
+            a2 = (uint32_t)aes_sbox[(data[(row+2)%4]>>8)&0xFF];
             a3 = (uint32_t)aes_sbox[(data[(row+3)%4])&0xFF];
 
             /* Perform MixColumn iff not last round */
@@ -513,7 +513,7 @@ void AES::encrypt(uint32_t *data)
         }
 
         /* KeyAddition - note that it is vital that this loop is separate from
-           the MixColumn operation, which must be atomic...*/ 
+           the MixColumn operation, which must be atomic...*/
         for (row = 0; row < 4; row++)
             data[row] = tmp[row] ^ *(k++);
     }
@@ -526,7 +526,7 @@ void AES::encrypt(uint32_t *data)
  * Decrypt a single block (16 bytes) of data
  */
 void AES::decrypt(uint32_t *data)
-{ 
+{
     uint32_t tmp[4];
     uint32_t xt0,xt1,xt2,xt3,xt4,xt5,xt6;
     uint32_t a0, a1, a2, a3, row;
@@ -553,7 +553,7 @@ void AES::decrypt(uint32_t *data)
             if (curr_rnd<(rounds-1))
             {
                 /* The MDS cofefficients (0x09, 0x0B, 0x0D, 0x0E)
-                   are quite large compared to encryption; this 
+                   are quite large compared to encryption; this
                    operation slows decryption down noticeably. */
                 xt0 = AES_xtime(a0^a1);
                 xt1 = AES_xtime(a1^a2);
@@ -584,7 +584,7 @@ void AES::decrypt(uint32_t *data)
 AES::AES(const uint8_t *key, const uint8_t *iv, AES_MODE mode, CIPHER_MODE cipherMode)
 {
     _cipherMode = cipherMode;
-    
+
     int i, ii;
     uint32_t *W, tmp, tmp2;
     const unsigned char *ip;
@@ -668,7 +668,7 @@ AES::AES(const uint8_t *key, const uint8_t *iv, AES_MODE mode, CIPHER_MODE ciphe
 
     /* copy the iv across */
     memcpy(_iv, iv, 16);
-    
+
     /* Do we need to convert the key */
     if (_cipherMode == CIPHER_DECRYPT)
     {
@@ -719,8 +719,8 @@ bool AES::checkPad(uint8_t* in, int lsize)
                 return false;
             }
         }
-    } 
-    else 
+    }
+    else
     {
         return true;
     }
@@ -732,8 +732,8 @@ void AES::processNoPad(const uint8_t *in, uint8_t *out, int length)
     if (_cipherMode == CIPHER_ENCRYPT)
     {
         encryptCBC(in, out, length);
-    } 
-    else 
+    }
+    else
     {
         decryptCBC(in, out, length);
     }
@@ -747,8 +747,8 @@ void AES::process(const uint8_t *in, uint8_t *out, int length)
         uint8_t in_pad[getSize()];
         padPlaintext(in, in_pad);
         encryptCBC(in_pad, out, getSize());
-    } 
-    else 
+    }
+    else
     {
         decryptCBC(in, out, length);
     }
@@ -777,7 +777,7 @@ void AES::encryptCBC(const uint8_t *in, uint8_t *out, int length)
 
         for (i = 0; i < 4; i++)
         {
-            tout[i] = tin[i]; 
+            tout[i] = tin[i];
             out_32[i] = crypto_htonl(tout[i]);
         }
 
@@ -855,10 +855,10 @@ void AES::convertKey()
 #if defined ESP8266 || defined ESP32
 /**
  * ESP8266 and ESP32 specific hardware true random number generator.
- * 
- * Acording to the ESP32 documentation, you should not call the tRNG 
+ *
+ * Acording to the ESP32 documentation, you should not call the tRNG
  * faster than 5MHz
- * 
+ *
  */
 
 void RNG::fill(uint8_t *dst, unsigned int length)
@@ -923,7 +923,7 @@ SHA256HMAC::SHA256HMAC(const byte *key, unsigned int keyLen)
         keyHahser.doUpdate(key, keyLen);
         keyHahser.doFinal(theKey);
     }
-    else 
+    else
     {
         // we already set the buffer to 0s, so just copy keyLen
         // bytes from key
@@ -975,5 +975,3 @@ void SHA256HMAC::blockXor(const byte *in, byte *out, byte val, byte len)
         out[i] = in[i] ^ val;
     }
 }
-
-
