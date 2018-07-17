@@ -209,6 +209,7 @@ void setup(void) {
   doorAccesPhases.init(ownUDID);
   doorAccesPhases.Phase1("99qIN0M", BASE_URL);
   doorAccesPhases.Phase2();
+  //doorAccesPhases.Phase3("nfcTagMessage");
 
 }
 
@@ -249,53 +250,40 @@ void loop(void) {
               Serial.printf("ndefPaylen: %d\n\r",ndefPaylen);
               if(ndefPaylen>0)
               {
-                byte ndefPayBuff[ndefPaylen+1];
+                char ndefPayBuff[ndefPaylen+1];
                 for(unsigned int k = 0; k<=ndefPaylen;k++)
                 ndefPayBuff[k]=0;
 
-                ndefRec.getPayload(ndefPayBuff);
-                Serial.println(String(((char*)ndefPayBuff)).length());
+                ndefRec.getPayload((uint8_t*)ndefPayBuff);
+                String ndefPayStr = String(ndefPayBuff);
+                Serial.println(ndefPayStr);
 
-                if(String(((char*)ndefPayBuff)).length()==ndefPaylen)
+                if(ndefPayStr.length()==ndefPaylen)
                 {
-                  //Serial.println(String((char*)ndefPayBuff));
-                  String handleEntryIdenti = "enDoorHandle:";
-                  int startHandleEntry = find_text(handleEntryIdenti,((char*)ndefPayBuff));
-                  Serial.println("bis hier läufts");
-                  Serial.println(String((char*)ndefPayBuff));
-                  Serial.printf("postition of .enDoorHandle: %d\n\r",startHandleEntry);
-
-                  if(startHandleEntry==1)
-                  {
-                      body = String((char*)&ndefPayBuff[startHandleEntry+handleEntryIdenti.length()+1]);
-                      Serial.println(body);
-                      String path = "access/";
-                      //httpRequest(path, body);
-                  }
+                  Serial.println(ndefPayStr);
+                  doorAccesPhases.Phase3(ndefPayStr);
                 }
-                else
-                Serial.println("read of NFCtag: was corrupted");
-              }
-              else
-              Serial.println("read of NFCtag: was corrupted");
-            }
+            else
+            Serial.println("read of NFCtag: was corrupted");
           }
+          else
+          Serial.println("read of NFCtag: was corrupted");
         }
-        else
-        Serial.println("read of NFCtag: no entry to read from");
-
-
-        Serial.println("\n-----------\n");
-        delay(500); //avoid http POST flooding
-
+      }
     }
+    else
+    Serial.println("read of NFCtag: no entry to read from");
+
+
+    Serial.println("\n-----------\n");
+    delay(500); //avoid http POST flooding
+
+  }
 
   //check if button was pressed. that will reset the wifi to default and api mode.
   //if (interruptUserButtonFlag) resetToFactoryDefaults();
   //else yield(); // PN532 probably timed out waiting for a card.. let's let the ESPcore handle wifi stuff
   while (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength)) yield(); //let ESPcore handle wifi stuff
-
-
 }
 
 

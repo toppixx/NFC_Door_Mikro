@@ -15,7 +15,7 @@ class DoorAccesPhases {
         void init(char* udid); //evtl auf 32Byte prüfen
         bool Phase1(char* uuid, String baseURL);
         bool Phase2(void);
-        bool Phase3(void);
+        bool Phase3(String& ndefPayBuff);
         void reset(void);
     private:
         bool sha256Calc(char* strInBuf, byte* ArrOutBuf,byte ArrOutLen);
@@ -42,11 +42,13 @@ class DoorAccesPhases {
         #define nfcUUIDLen 33
         char nfcUUID[nfcUUIDLen];
         #define nfcAESEncryptionKeyLen 17
-        char nfcAESEncryptionKey[nfcAESEncryptionKeyLen];
+        uint8_t nfcAESEncryptionKey[nfcAESEncryptionKeyLen];
+        #define nfcAESCipherLen 33
+        uint8_t nfcAESCipher[nfcAESCipherLen];
         #define nfcAESIVLen 17
-        byte nfcAESIV[nfcAESIVLen];
+        uint8_t nfcAESIV[nfcAESIVLen];
         #define nfcDataLoadLen 33
-        byte nfcDataLoad[nfcDataLoadLen];
+        char nfcDataLoad[nfcDataLoadLen];
         String httpBaseURL;
         #define httpTDATLen 33
         uint8_t httpTDAT[httpTDATLen];
