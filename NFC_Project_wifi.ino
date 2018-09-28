@@ -134,7 +134,7 @@ void setup(void) {
   // }
 
   sprintf(strBuffer,"%d.%d.%d.%d",IP[0], IP[1], IP[2], IP[3]);
-  BASE_URL = "http://"+String(strBuffer)+":7000/";
+  BASE_URL = "http://"+String(strBuffer)+":7000/nfc/";
   doorAccesPhases.reset();
   //setup user button to give the posibility to reset wifi stack and do a new connection over the web interface.
   //pinMode(interruptPin, INPUT_PULLUP);
@@ -206,7 +206,7 @@ void setup(void) {
   Serial.println("Waiting for an ISO14443A card");
   Serial.println("\n-----------\n");
 
-  doorAccesPhases.init(ownUDID);
+  doorAccesPhases.init(ownUDID, BASE_URL);
   //doorAccesPhases.Phase1("99qIN0M", BASE_URL);
   //doorAccesPhases.Phase2();
   //doorAccesPhases.Phase3("nfcTagMessage");
@@ -270,7 +270,7 @@ void loop(void) {
 
                   Serial.println("NFC-Tag was read, structured and stored successfully\n");
 
-                  doorAccesPhases.Phase1(tag.getUidString().c_str(), BASE_URL);
+                  doorAccesPhases.Phase1(tag.getUidString().c_str());
                   Serial.println("=========================================");
                   doorAccesPhases.Phase2();
                   Serial.println("=========================================");

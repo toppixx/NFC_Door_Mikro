@@ -22,7 +22,7 @@ DoorAccesPhases::DoorAccesPhases()
 
 DoorAccesPhases::~DoorAccesPhases(){}
 
-void DoorAccesPhases::init(const char* udid)
+void DoorAccesPhases::init(const char* udid, String baseURL)
 {
   char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
   char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -36,16 +36,18 @@ void DoorAccesPhases::init(const char* udid)
   char keyHash[65] = "";
   for (unsigned int i = 0 ; i<32; i++)
       sprintf(&keyHash[i*2], "%02X",UDID[i]);
-  Serial.println("UDID");
-  Serial.println();
+  //Serial.println("UDID");
+  //Serial.println();
   memcpy(nfcUUID, freeEr32, 33);
   memcpy(nfcAESEncryptionKey, freeEr16, 17);
   memcpy(nfcAESIV, freeEr16, 17);
   memcpy(nfcDataLoad, freeEr32, 33);
-  httpBaseURL = "";
   memcpy(httpTDAT, freeEr32, 33);
   memcpy(httpAESIV, freeEr16, 17);
   memcpy(httpAESEncryptionKey, freeEr16, 17);
+
+  httpBaseURL = baseURL;
+
 }
 
 /*for the future not implemented at server yet*/
@@ -66,10 +68,9 @@ void DoorAccesPhases::init(const char* udid)
 // memcpy(sha256UUIDBuffer,sha256Hasher.resultHmac(), sha256UUIDLength);
 //sha256UUIDBuffer need to be send to server with rndsha256Buffer
 
-bool DoorAccesPhases::Phase1(const char* uuid, String baseURL)
+bool DoorAccesPhases::Phase1(const char* uuid)
 {
   Serial.println("==========================================\nStarting Phase 1 Server Call with UUID to get TDAT");
-  httpBaseURL = baseURL;
 
   if(String(uuid).length()<=32)
     memcpy(nfcUUID, uuid, strlen(uuid));
@@ -78,7 +79,7 @@ bool DoorAccesPhases::Phase1(const char* uuid, String baseURL)
     Serial.println("uuid to long");
     return false;
   }
-  String path = "nfc/DoorAcContPhase1/";
+  String path = "DoorAcContPhase1/";
   String hexDigStr =  getRnd32hexDigString();
   String headerType = "content-type";
   String boundary = "--------------------------" + hexDigStr;
@@ -86,7 +87,8 @@ bool DoorAccesPhases::Phase1(const char* uuid, String baseURL)
   //String body = "multipart/form-data; boundary=----"+hexDigStr+"\n\r------"+hexDigStr+"\r\nContent-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+nfcUUID+"\r\n------"+hexDigStr+"--";
   String body  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+nfcUUID+"\r\n"+"--"+boundary+"--\r\n";
   HTTPClient http;
-  http.begin(baseURL + path);
+  http.begin(httpBaseURL + path);
+  Serial.println(httpBaseURL + path);
   http.addHeader(headerType, headerStr);
   int httpCode = http.POST(body);
 
@@ -148,7 +150,7 @@ bool DoorAccesPhases::Phase2()
 {
 
   Serial.println("\n=========================================\nStarting Phase 2 Server Call");
-  String path = "nfc/DoorAcContPhase2/";
+  String path = "DoorAcContPhase2/";
   unsigned char sha256length = 32;
   uint8_t sha256Buffer[65] ="";
   char keyHash[65] ="";
@@ -193,6 +195,7 @@ bool DoorAccesPhases::Phase2()
     Serial.println(http.errorToString(httpCode));
     return false;
   }
+
 
     String httpRespo = http.getString();
     //Serial.println("");
@@ -491,9 +494,60 @@ bool DoorAccesPhases::Phase3(String& ndefPayBuff)
             //Serial.println((char*)nfcAESEncryptionKey);
 
             //TODO give the right names  Change all the length def to 32 and make +1 while init and creation
-            memcpy(nfcDataLoad, decrypted, nfcDataLoadLen-1);
-            Serial.print("\t");
-            Serial.println((char*)nfcDataLoad);
+            char nfcUTIDnotStored[cypherLen+1];
+            memcpy(nfcUTIDnotStored, decrypted, cypherLen);
+            Serial.print("\nfinished\nUTID:\t");
+            Serial.println((char*)nfcUTIDnotStored);
+
+            Serial.println("--------------reading UTID from NFC competed--------------");
+            Serial.println("------going to prepare httpMessage to forward UTID--------");
+            char* userKeys = &nfcUUID[0];
+            char KeyHash[cypherLen+1];
+            char TDAT3[] = "testTDAT3";
+
+            AES aesEncryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
+            aesEncryptor.process((uint8_t*)nfcUTIDnotStored, (uint8_t*)KeyHash, cypherLen);
+
+            Serial.print("userKeys:\t");
+            Serial.print(userKeys);
+            printBlock((uint8_t*)userKeys,nfcUUIDLen);
+
+            Serial.print("KeyHash:\t");
+            //Serial.print(KeyHash);
+            printBlock((uint8_t*)KeyHash,cypherLen);
+
+            Serial.print("userKeys:\t");
+            Serial.print(TDAT3);
+            printBlock((uint8_t*)TDAT3,strlen(TDAT3));
+
+            HTTPClient http;
+            String path = "DoorAcContPhase3/";
+            String headerType = "content-type";
+            String hexDigStr =  getRnd32hexDigString();
+            String boundary = "--------------------------" + hexDigStr;
+            String headerStr = "multipart/form-data; boundary=" + boundary;
+            String content1  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+String(userKeys)+"\r\n";
+            String content2  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"KeyHash\"\r\n\r\n"+String(KeyHash)+"\r\n";
+            String contetn3 = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"TDAT3\"\r\n\r\n"+String(TDAT3)+"\r\n"+"--"+boundary+"--\r\n";
+            String body = content1 +content2 +contetn3;
+
+            http.begin(httpBaseURL + path);
+            http.addHeader(headerType, headerStr);
+            int httpCode = http.POST(body);
+
+            if (httpCode < 0)
+            {
+              Serial.println("request error - " + httpCode);
+              Serial.println(http.errorToString(httpCode));
+              return false;
+            }
+            else
+            {
+              String httpRespo = http.getString();
+              Serial.println(httpRespo);
+              Serial.println("==============Phase 3 finished===============");
+              return true;
+            }
           }
         else
           Serial.println("read Json of NFC-Tag Failed");

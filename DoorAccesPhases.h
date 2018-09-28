@@ -12,8 +12,8 @@ class DoorAccesPhases {
         // bool Phase2(void);
         // bool Phase3(void);
         // void reset(void);
-        void init(const char* udid); //evtl auf 32Byte prüfen
-        bool Phase1(const char* uuid, String baseURL);
+        void init(const char* udid, String baseURL); //evtl auf 32Byte prüfen
+        bool Phase1(const char* uuid);
         bool Phase2(void);
         bool Phase3(String& ndefPayBuff);
         void reset(void);
