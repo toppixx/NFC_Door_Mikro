@@ -22,7 +22,7 @@ DoorAccesPhases::DoorAccesPhases()
 
 DoorAccesPhases::~DoorAccesPhases(){}
 
-void DoorAccesPhases::init(char* udid)
+void DoorAccesPhases::init(const char* udid)
 {
   char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
   char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -37,7 +37,7 @@ void DoorAccesPhases::init(char* udid)
   for (unsigned int i = 0 ; i<32; i++)
       sprintf(&keyHash[i*2], "%02X",UDID[i]);
   Serial.println("UDID");
-  Serial.println(keyHash);
+  Serial.println();
   memcpy(nfcUUID, freeEr32, 33);
   memcpy(nfcAESEncryptionKey, freeEr16, 17);
   memcpy(nfcAESIV, freeEr16, 17);
@@ -66,8 +66,9 @@ void DoorAccesPhases::init(char* udid)
 // memcpy(sha256UUIDBuffer,sha256Hasher.resultHmac(), sha256UUIDLength);
 //sha256UUIDBuffer need to be send to server with rndsha256Buffer
 
-bool DoorAccesPhases::Phase1(char* uuid, String baseURL)
+bool DoorAccesPhases::Phase1(const char* uuid, String baseURL)
 {
+  Serial.println("==========================================\nStarting Phase 1 Server Call with UUID to get TDAT");
   httpBaseURL = baseURL;
 
   if(String(uuid).length()<=32)
@@ -77,7 +78,7 @@ bool DoorAccesPhases::Phase1(char* uuid, String baseURL)
     Serial.println("uuid to long");
     return false;
   }
-  String path = "NFCDoorAcContPhase1/";
+  String path = "nfc/DoorAcContPhase1/";
   String hexDigStr =  getRnd32hexDigString();
   String headerType = "content-type";
   String boundary = "--------------------------" + hexDigStr;
@@ -101,12 +102,12 @@ bool DoorAccesPhases::Phase1(char* uuid, String baseURL)
     String httpRespo = http.getString();
 
     //Serial.println(httpRespo);
-    Serial.println("going to Json");
+    //Serial.println("going to Json");
     if(httpRespo.length()<400)
     {
       StaticJsonBuffer<400> jsonBuffer;
       JsonObject& jsonObject = jsonBuffer.parseObject(httpRespo);
-      Serial.println("Jsoned");
+      //Serial.println("Jsoned");
 
       if (!jsonObject.success())
       {
@@ -117,11 +118,15 @@ bool DoorAccesPhases::Phase1(char* uuid, String baseURL)
       {
         const char* tdatArr = jsonObject["returnToken"];
         //Serial.println(tdatArr);
-        Serial.println("get returnToken");
+        //Serial.println("get returnToken");
         if (tdatArr)
         {
           if((String(tdatArr).length()) ==32)
+          {
             memcpy(httpTDAT, tdatArr, strlen(tdatArr)+1);
+            Serial.print("recieved and Stored TDAT\nTDAT:\t");
+            Serial.println((char*)httpTDAT);
+          }
           else
             Serial.println("TDAT wrong size");
           }
@@ -142,8 +147,8 @@ bool DoorAccesPhases::Phase1(char* uuid, String baseURL)
 bool DoorAccesPhases::Phase2()
 {
 
-
-  String path = "NFCDoorAcContPhase2/";
+  Serial.println("\n=========================================\nStarting Phase 2 Server Call");
+  String path = "nfc/DoorAcContPhase2/";
   unsigned char sha256length = 32;
   uint8_t sha256Buffer[65] ="";
   char keyHash[65] ="";
@@ -151,20 +156,20 @@ bool DoorAccesPhases::Phase2()
   char plainUDID_TDATbuffer[plainUDID_TDATlength+1];
   memcpy(&plainUDID_TDATbuffer[0], httpTDAT, httpTDATLen);
   memcpy(&plainUDID_TDATbuffer[httpTDATLen-1], UDID, UDIDLen);
+  Serial.println("-------Local SHA256 Generation-------");
+  Serial.print("UDID:\t\t");
   Serial.println((char*)UDID);
+  Serial.print("TDAT:\t\t");
   Serial.println((char*)httpTDAT);
-
+  Serial.print("TDAT+UDID:\t");
   Serial.println(plainUDID_TDATbuffer);
 
   sha256Calc(plainUDID_TDATbuffer, sha256Buffer, sha256length);
-
-  Serial.println("looped output sha256Buffer HEX");
+  Serial.print("Sha256:\t");
+  Serial.println((char*)sha256Buffer);
   for (unsigned int i = 0 ; i<32; i++)
       sprintf(&keyHash[i*2], "%02X",sha256Buffer[i]);
-
-  Serial.println("\n\r");
-  Serial.println("println keyHash");
-
+  Serial.print("SHA256 Hexed:\t");
   Serial.println(keyHash);
 
   String TDAT2 = "TDATtest";
@@ -190,16 +195,16 @@ bool DoorAccesPhases::Phase2()
   }
 
     String httpRespo = http.getString();
-    Serial.println("");
-    Serial.println(httpRespo);
-    Serial.println("");
+    //Serial.println("");
+    //Serial.println(httpRespo);
+    //Serial.println("");
 
-    Serial.println("going to Json");
+    //Serial.println("going to Json");
     if(httpRespo.length()<200)
     {
       StaticJsonBuffer<200> jsonBuffer;
       JsonObject& jsonObject = jsonBuffer.parseObject(httpRespo);
-      Serial.println("Jsoned");
+      //Serial.println("Jsoned");
 
       if (!jsonObject.success())
       {
@@ -214,18 +219,21 @@ bool DoorAccesPhases::Phase2()
         const char* aesCypher = jsonObject["cypher"];
         const char* aseIV = jsonObject["iv"];
 
-          Serial.println("get  iv");
+        //  Serial.println("get  iv");
+        //TODO aes IV Json convertieren sauberer machen jeweils eigenen IF für fail und gesamte abfrage form nächsten Schritt
+        //TODO beispiel sieheh Phase 3 schematisch 1 zu 1 übernhemen
           if (aseIV)
           {
             byte ivBuffer[AES_IV_LENGTH+1];
             bool sucConvAESIV = convertStringToByteArr(aseIV, ivBuffer, AES_IV_LENGTH);
             if(sucConvAESIV)
             {
-              Serial.println("converted IV");
+              //Serial.println("converted IV");
               memcpy(httpAESIV, ivBuffer, AES_IV_LENGTH);
-              printBlock(httpAESIV, AES_IV_LENGTH);
-              Serial.println("(char*)httpAESIV");
-              Serial.println((char*)httpAESIV);
+              Serial.println("\n\n-------http Return from HttpRequest-------");
+              //printBlock(httpAESIV, AES_IV_LENGTH);
+              //Serial.println("(char*)httpAESIV");
+              //Serial.println((char*)httpAESIV);
             }
             else
             {
@@ -239,25 +247,25 @@ bool DoorAccesPhases::Phase2()
             return false;
           }
           //Serial.println(tdatArr);
-          Serial.println("get cypher");
+          //Serial.println("get cypher");
           if (aesCypher)
           {
-              Serial.println("aseCypher Text");
-              Serial.println(aesCypher);
-              Serial.println("aesCypher Len");
-              Serial.println(strlen(aesCypher));
+              //Serial.println("aseCypher Text");
+              //Serial.println(aesCypher);
+              //Serial.println("aesCypher Len");
+              //Serial.println(strlen(aesCypher));
               uint8_t cpyheredTextLen = strlen(aesCypher);
               uint8_t cypheredText[cpyheredTextLen];
               uint8_t cypherLen = cpyheredTextLen/2;
               uint8_t cypher[cypherLen];
               bool succAEScypher = convertStringToByteArr(aesCypher, cypher, cypherLen);
 
-              if( succAEScypher)
+              if(succAEScypher)
               {
 
-                Serial.println("\n\rconverted cypher");
+                //Serial.print("\n\rconverted cypher:\t");
                 //memcpy(cypheredText, cypherBuffer, cypherLen);
-                printBlock(cypher,cypherLen);
+                //printBlock(cypher,cypherLen);
                 //Serial.println((char*)cypheredText);
 
                 uint8_t * keyEncrypt = UDID;
@@ -265,20 +273,21 @@ bool DoorAccesPhases::Phase2()
                 // Serial.println("strlen(udid)");
                 // Serial.println(strlen(udid));
                 // memcpy(keyEncrypt, udid, strlen(udid));
-                Serial.println("cypher");
-                printBlock(cypher, cypherLen);
+                //Serial.print("cypher: \t");
+                //printBlock(cypher, cypherLen);
                 //int decodedSize = cpyheredTextLen;
                 //int decryptedSize = decodedSize - AES_KEY_LENGTH - SHA256HMAC_SIZE;
                 char decrypted[cypherLen+1];
                 //int decodedSize = ivEncryptedHmacSize;
                 //uint8_t* decoded = ivEncryptedHmac;
-                Serial.println("keyEncrypt encryption Key");
-                //Serial.println((char*)keyEncrypt);
+                Serial.print("encryption Key: ");
+                Serial.print((char*)keyEncrypt);
                 printBlock(keyEncrypt,16);
-                Serial.println("httpAESIV");
-                //Serial.println((char*)httpAESIV);
+                Serial.print("httpAESIV: ");
+                Serial.print((char*)httpAESIV);
                 printBlock(httpAESIV, 16);
-                Serial.println("cypher");
+                Serial.print("cypher: ");
+                Serial.print((char*)cypher);
                 printBlock(cypher, cypherLen);
                 AES aesDecryptor(keyEncrypt, httpAESIV, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
 
@@ -286,13 +295,14 @@ bool DoorAccesPhases::Phase2()
                 //Serial.println(strlen(cypher));
                 aesDecryptor.process((uint8_t*)cypher, (uint8_t*)decrypted, cypherLen);
 
-                Serial.printf("Decrypted Packet HEX (%d bytes)", AES_KEY_LENGTH);
+                Serial.printf("Decrypted Packet HEX (%d bytes): ", AES_KEY_LENGTH);
+                Serial.print((char*)decrypted);
                 printBlock((uint8_t*)decrypted, AES_KEY_LENGTH);
 
-                Serial.printf("Decrypted Packet (%d bytes):\n",  AES_KEY_LENGTH);
-                Serial.println(decrypted);
+                //Serial.printf("Decrypted Packet (%d bytes):\t",  AES_KEY_LENGTH);
+                //Serial.println(decrypted);
                 memcpy(nfcAESEncryptionKey, decrypted, nfcAESEncryptionKeyLen-1);
-                Serial.println((char*)nfcAESEncryptionKey);
+                //Serial.println((char*)nfcAESEncryptionKey);
 
 
               }
@@ -320,26 +330,29 @@ bool DoorAccesPhases::Phase2()
 bool DoorAccesPhases::Phase3(String& ndefPayBuff)
 {
   bool retval = false;
-  Serial.println("going to Json");
-  Serial.println("ndefPAyLen");
-  Serial.println(ndefPayBuff);
-  Serial.println((ndefPayBuff.length()));
-  if((ndefPayBuff.length())<300)
+  Serial.println("===========Starting Phase 3==============");
+  //Serial.println("going to Json");
+  //Serial.println("ndefPAyLen");
+  //Serial.println(ndefPayBuff);
+  //Serial.println((ndefPayBuff.length()));
+  //Serial.println("0");
+  Serial.println(ndefPayBuff.length());
+  if((ndefPayBuff.length())<150)
   {
-    StaticJsonBuffer<300> jsonBuffer;
+    StaticJsonBuffer<150> jsonBuffer;
     JsonObject& jsonObject = jsonBuffer.parseObject(ndefPayBuff);
-    Serial.println((ndefPayBuff.length()));
+    //Serial.println((ndefPayBuff.length()));
     for(uint16_t i = 0;i<(ndefPayBuff.length());i++)
     {
       if(ndefPayBuff[i]=='.')
         ndefPayBuff[i] = ' ';
     }
-    Serial.println("len ndefPayBuf");
-    Serial.println((ndefPayBuff.length()));
-    Serial.println(ndefPayBuff);
+    //Serial.println("len ndefPayBuf");
+    //Serial.println((ndefPayBuff.length()));
+    //Serial.println(ndefPayBuff);
 
-    Serial.println("Jsoned");
-    Serial.println(jsonObject.success());
+    //Serial.println("Jsoned");
+    //Serial.println(jsonObject.success());
     if (!jsonObject.success())
     {
       Serial.println("parseObject() failed");
@@ -347,110 +360,145 @@ bool DoorAccesPhases::Phase3(String& ndefPayBuff)
     }
     else
     {
-      const char* aesCypher = jsonObject["cipher"];
-      const char* aesIV = jsonObject["iv"];
-      Serial.println(aesCypher);
-      Serial.println(aesIV);
+      //#TODO give some nice Names
+      const char* nfcAesCypherJson = jsonObject["cipher"];
+      uint8_t cypherLen = 0;
+
+      const char* nfcAesIvJson = jsonObject["iv"];
+
+      bool succAEScypher = false;
+      bool sucConvAESIV  = false;
+      //Serial.println(nfcAesCypherJson);
+      //Serial.println(nfcAesCypherJson);
+      //Serial.println("1");
         Serial.println("get  iv");
-        if (aesIV)
+        if (nfcAesIvJson)
         {
+          //Serial.println("2");
           byte ivBuffer[AES_IV_LENGTH+1];
-          //TODO from here weiter
-          printBlock((uint8_t*)aesIV, AES_IV_LENGTH);
-          Serial.println(strlen((char*)aesIV));
-          bool sucConvAESIV = convertStringToByteArr(aesIV, ivBuffer, AES_IV_LENGTH);
+          printBlock((uint8_t*)nfcAesIvJson, AES_IV_LENGTH);
+          sucConvAESIV = convertStringToByteArr(nfcAesIvJson, ivBuffer, AES_IV_LENGTH);
+          Serial.println(strlen((char*)ivBuffer));
           printBlock(ivBuffer,AES_IV_LENGTH);
           if(sucConvAESIV)
           {
-            Serial.println("converted IV");
+            //Serial.println("3");
             memcpy(nfcAESIV, ivBuffer, AES_IV_LENGTH);
+
+            Serial.print("Json extracted AES-IV of NFC-Tag-Data:\t");
+            Serial.print((char*)nfcAESIV);
+            Serial.print("\t");
             printBlock(nfcAESIV, AES_IV_LENGTH);
-            Serial.println("(char*)nfcAESIV");
-            Serial.println((char*)nfcAESIV);
+
+          }
+          else
+            Serial.println("Byte String conversion of iv Entry failed ");
+        }
+        else
+        {
+          Serial.println("couldnt find iv Entry in Json");
+        }
+      //Serial.println(tdatArr);
+      //Serial.println("get cypher");
+      if (nfcAesCypherJson)
+      {
+          //Serial.println("4");
+          Serial.print("AesCypher of NFC-Tag-Data:\t");
+          Serial.print((char*)nfcAESCipher);
+          Serial.print("\t");
+          Serial.println(strlen((char*)nfcAESCipher));
+
+          uint8_t cpyheredTextLen = strlen((char*)nfcAesCypherJson);
+          uint8_t cypheredText[cpyheredTextLen];
+          cypherLen = cpyheredTextLen/2;
+          //Serial.println("cyphereLen");
+          //Serial.println(cypherLen);
+          //Serial.println("cpyheredTextLen");
+          //Serial.println(cpyheredTextLen);
+          uint8_t cypherBuffer[cypherLen];
+
+          succAEScypher = convertStringToByteArr(nfcAesCypherJson, cypherBuffer, cypherLen);
+          if(succAEScypher)
+          {
+            memcpy(nfcAESCipher, cypherBuffer, cypherLen);
+
+            Serial.print("Json extracted AES-Cipher of NFC-Tag-Data:\t");
+            Serial.print((char*)nfcAESCipher);
+            Serial.print("\t");
+            printBlock(nfcAESCipher, cypherLen);
           }
         }
         else
         {
-          Serial.println("converting iv failed");
-          return false;
+            Serial.println("couldnt find cipher Entry in Json");
         }
-      //Serial.println(tdatArr);
-      Serial.println("get cypher");
-      if (aesCypher)
-      {
-          Serial.println("aseCypher Text");
-          Serial.println((char*)nfcAESCipher);
-          Serial.println("aesCypher Len");
-          Serial.println(strlen((char*)nfcAESCipher));
-
-          uint8_t cpyheredTextLen = strlen((char*)aesCypher);
-          uint8_t cypheredText[cpyheredTextLen];
-          uint8_t cypherLen = cpyheredTextLen/2;
-          Serial.println("cyphereLen");
-          Serial.println(cypherLen);
-          Serial.println("cpyheredTextLen");
-          Serial.println(cpyheredTextLen);
-          uint8_t cypher[cypherLen];
-          bool succAEScypher = convertStringToByteArr(aesCypher, cypher, cypherLen);
-          if( succAEScypher)
+          Serial.println("----------Extratcting of NFC-Tag-Data finished----------");
+          Serial.println("\n-----------Starting to decrypt the NFC-Tag-Data");
+          if( succAEScypher && sucConvAESIV)
           {
+            //Serial.println("5");
 
-            Serial.println("converted IV");
-            printBlock(nfcAESIV, AES_IV_LENGTH);
-            memcpy(nfcAESCipher, cypher, cypherLen);
-            Serial.println("converted IV");
-            printBlock(nfcAESIV, AES_IV_LENGTH);
-            Serial.println("\n\rconverted cypher");
+            //memcpy(nfcAESCipher, cypher, cypherLen);
+            //Serial.print("converted IV:\t");
+            //printBlock(nfcAESIV, AES_IV_LENGTH);
+            //Serial.println("\n\rconverted cypher");
             //memcpy(cypheredText, cypherBuffer, cypherLen);
-            printBlock(cypher,cypherLen);
+            //printBlock(cypher,cypherLen);
             //Serial.println((char*)cypheredText);
-            uint8_t * keyEncrypt = nfcAESEncryptionKey;
+            //uint8_t * keyEncrypt = nfcAESEncryptionKey;
             //char * udid = "cKeycKeycKeycKey";
             // Serial.println("strlen(udid)");
             // Serial.println(strlen(udid));
             // memcpy(keyEncrypt, udid, strlen(udid));
-            Serial.println("cypher");
-            printBlock(cypher, cypherLen);
+            //Serial.print("cypher: \t");
+            //printBlock(cypher, cypherLen);
             //int decodedSize = cpyheredTextLen;
             //int decryptedSize = decodedSize - AES_KEY_LENGTH - SHA256HMAC_SIZE;
             char decrypted[cypherLen+1];
             //int decodedSize = ivEncryptedHmacSize;
             //uint8_t* decoded = ivEncryptedHmac;
-            Serial.println("keyEncrypt encryption Key");
-            //Serial.println((char*)keyEncrypt);
+            Serial.print("encryption Key:\t");
+            Serial.print((char*)nfcAESEncryptionKey);
+            Serial.print("\t");
             printBlock(nfcAESEncryptionKey,16);
-            Serial.println("nfcAESIV");
-            //Serial.println((char*)httpAESIV);
-            printBlock(nfcAESIV, 16);
-            Serial.println("cypher");
-            printBlock(cypher, cypherLen);
+
+            Serial.print("nfcAESIV:\t");
+            Serial.print((char*)nfcAESIV);
+            Serial.print("\t");
+            printBlock((uint8_t*)nfcAESIV, 16);
+            //Serial.println("cypher");
+            //printBlock(cypher, cypherLen);
             AES aesDecryptor(nfcAESEncryptionKey, nfcAESIV, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
 
 
             //Serial.println(strlen(cypher));
-            Serial.println("cypher");
-            printBlock(cypher,32);
-            Serial.println("cypherLen");
-            Serial.println(cypherLen);
-            aesDecryptor.process((uint8_t*)cypher, (uint8_t*)decrypted, cypherLen);
+            Serial.print("cypher:\t");
+            Serial.print((char*)nfcAESCipher);
+            Serial.print("\t");
+            printBlock((uint8_t*)nfcAESCipher,32);
+            //Serial.println("cypherLen");
+            //Serial.println(cypherLen);
+            aesDecryptor.process((uint8_t*)nfcAESCipher, (uint8_t*)decrypted, cypherLen);
 
             Serial.printf("Decrypted Packet HEX (%d bytes)", AES_KEY_LENGTH);
             printBlock((uint8_t*)decrypted, AES_KEY_LENGTH);
 
-            Serial.printf("Decrypted Packet (%d bytes):\n",  AES_KEY_LENGTH);
-            Serial.println(decrypted);
-            memcpy(nfcAESEncryptionKey, decrypted, nfcAESEncryptionKeyLen-1);
-            Serial.println((char*)nfcAESEncryptionKey);
+            Serial.printf("Decrypted Packet (%d bytes):",  AES_KEY_LENGTH);
+            Serial.print(decrypted);
+            //TODO
+            //memcpy(nfcAESEncryptionKey, decrypted, nfcAESEncryptionKeyLen-1);
+            //Serial.print("\t");
+            //Serial.println((char*)nfcAESEncryptionKey);
 
+            //TODO give the right names  Change all the length def to 32 and make +1 while init and creation
+            memcpy(nfcDataLoad, decrypted, nfcDataLoadLen-1);
+            Serial.print("\t");
+            Serial.println((char*)nfcDataLoad);
           }
         else
-          Serial.println("read cipher failed");
-
-        }
-        else
-          Serial.println("read cipher failed");
+          Serial.println("read Json of NFC-Tag Failed");
       }
-
+      //TODO send UTID AES enciphered to the Server and recieve open Command 17.07.2018
   }
   return retval;
 }
@@ -578,10 +626,10 @@ String DoorAccesPhases::byteToHexString(char* charArr, unsigned char charArrLen)
 
 bool DoorAccesPhases::convertStringToByteArr(const char* input, byte* byteArrOutBuff, byte byteArrOutLength)
 {
-  Serial.println("byteArrOutLength");
-  Serial.println(byteArrOutLength);
-  Serial.println("strlen(input)");
-  Serial.println(strlen(input));
+  //Serial.println("byteArrOutLength");
+  //Serial.println(byteArrOutLength);
+  //Serial.println("strlen(input)");
+  //Serial.println(strlen(input));
   if( byteArrOutLength>=strlen(input)/2)
   {
     for(byte i = 0;i< strlen(input); i=i+4)
@@ -590,7 +638,7 @@ bool DoorAccesPhases::convertStringToByteArr(const char* input, byte* byteArrOut
       byteArrOutBuff[i/2] += convertCharToHex(input[i+1]);
       byteArrOutBuff[i/2+1] = convertCharToHex(input[i+2])*16;
       byteArrOutBuff[i/2+1] += convertCharToHex(input[i+3]);
-      Serial.print(input[i]); Serial.print(input[i+1]); Serial.print(input[i+2]); Serial.print(input[i+3]);
+      //Serial.print(input[i]); Serial.print(input[i+1]); Serial.print(input[i+2]); Serial.print(input[i+3]);
     }
     return true;
   }

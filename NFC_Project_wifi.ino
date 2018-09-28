@@ -41,7 +41,7 @@
 
 #include <DoorAccesPhases.h>
 
-char ownUDID[] = "97BCGxZpbYklBnPO";
+char ownUDID[] = "wozyATrFS9OJ71Vw";
 void unlock();
 //userbutton reset for connecting to new WIFI
 void resetToFactoryDefaults();
@@ -134,7 +134,7 @@ void setup(void) {
   // }
 
   sprintf(strBuffer,"%d.%d.%d.%d",IP[0], IP[1], IP[2], IP[3]);
-  BASE_URL = "http://"+String(strBuffer)+":8000/";
+  BASE_URL = "http://"+String(strBuffer)+":7000/";
   doorAccesPhases.reset();
   //setup user button to give the posibility to reset wifi stack and do a new connection over the web interface.
   //pinMode(interruptPin, INPUT_PULLUP);
@@ -207,18 +207,22 @@ void setup(void) {
   Serial.println("\n-----------\n");
 
   doorAccesPhases.init(ownUDID);
-  doorAccesPhases.Phase1("99qIN0M", BASE_URL);
-  doorAccesPhases.Phase2();
+  //doorAccesPhases.Phase1("99qIN0M", BASE_URL);
+  //doorAccesPhases.Phase2();
   //doorAccesPhases.Phase3("nfcTagMessage");
 
 }
-
+static int row = 0;
 void loop(void) {
-
+  row++;
   uint8_t uidLength;   // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
   String body;
-
+  if (row ==100)
+  {
+    Serial.println("row");
+    row = 0;
+  }
   // Wait for an ISO14443A type cards (Mifare, etc.).  When one is found
   // 'uid' will be populated with the UID, and uidLength will indicate
   // if the uid is 4 bytes (Mifare Classic) or 7 bytes (Mifare Ultralight)
@@ -236,18 +240,20 @@ void loop(void) {
         NfcTag tag = nfcAdapter.read();
         if(tag.hasNdefMessage())
         {
+          Serial.println("-------NFC-Tag-Plain-Data-------");
           tag.print();
+          Serial.println("--------------------------\n");
           if(tag.hasNdefMessage())
           {
            NdefMessage ndefMess = tag.getNdefMessage();
             unsigned int ndefRecCnt = ndefMess.getRecordCount();
-            Serial.printf("number of ndefRecCnt: %d\n\r",ndefRecCnt);
+            //Serial.printf("number of ndefRecCnt: %d\n\r",ndefRecCnt);
 
             for(unsigned int k =0;k<ndefRecCnt;k++)
             {
               NdefRecord ndefRec = ndefMess.getRecord(k);
               unsigned int ndefPaylen = ndefRec.getPayloadLength();
-              Serial.printf("ndefPaylen: %d\n\r",ndefPaylen);
+              //Serial.printf("ndefPaylen: %d\n\r",ndefPaylen);
               if(ndefPaylen>0)
               {
                 char ndefPayBuff[ndefPaylen+1];
@@ -256,12 +262,20 @@ void loop(void) {
 
                 ndefRec.getPayload((uint8_t*)ndefPayBuff);
                 String ndefPayStr = String(ndefPayBuff);
-                Serial.println(ndefPayStr);
+                //Serial.println(ndefPayStr);
 
                 if(ndefPayStr.length()==ndefPaylen)
                 {
-                  Serial.println(ndefPayStr);
-                  doorAccesPhases.Phase3(ndefPayStr);
+                  String NfcTagJsonedData = ndefPayStr;
+
+                  Serial.println("NFC-Tag was read, structured and stored successfully\n");
+
+                  doorAccesPhases.Phase1(tag.getUidString().c_str(), BASE_URL);
+                  Serial.println("=========================================");
+                  doorAccesPhases.Phase2();
+                  Serial.println("=========================================");
+                  doorAccesPhases.Phase3(NfcTagJsonedData);
+                  Serial.println("=========================================");
                 }
             else
             Serial.println("read of NFCtag: was corrupted");

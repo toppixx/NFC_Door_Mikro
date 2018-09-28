@@ -12,8 +12,8 @@ class DoorAccesPhases {
         // bool Phase2(void);
         // bool Phase3(void);
         // void reset(void);
-        void init(char* udid); //evtl auf 32Byte prüfen
-        bool Phase1(char* uuid, String baseURL);
+        void init(const char* udid); //evtl auf 32Byte prüfen
+        bool Phase1(const char* uuid, String baseURL);
         bool Phase2(void);
         bool Phase3(String& ndefPayBuff);
         void reset(void);
@@ -56,5 +56,6 @@ class DoorAccesPhases {
         uint8_t httpAESIV[httpAESIVLen];
         #define httpAESEncryptionKeyLen 17
         uint8_t httpAESEncryptionKey[httpAESEncryptionKeyLen];
+
 };
 #endif
