@@ -26,16 +26,11 @@ void DoorAccesPhases::init(const char* udid, String baseURL)
 {
   char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
   char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-  if(strlen(udid)<=32)
-  {
-    memcpy(UDID, udid, strlen(udid));
-    memcpy(httpAESEncryptionKey, udid, AES_IV_LENGTH);
-  }
-  else
-    Serial.println("udid wrong length");
-  char keyHash[65] = "";
-  for (unsigned int i = 0 ; i<32; i++)
-      sprintf(&keyHash[i*2], "%02X",UDID[i]);
+
+
+  //char keyHash[65] = "";
+  //for (unsigned int i = 0 ; i<32; i++)
+  //    sprintf(&keyHash[i*2], "%02X",UDID[i]);
   //Serial.println("UDID");
   //Serial.println();
   memcpy(nfcUUID, freeEr32, 33);
@@ -45,6 +40,15 @@ void DoorAccesPhases::init(const char* udid, String baseURL)
   memcpy(httpTDAT, freeEr32, 33);
   memcpy(httpAESIV, freeEr16, 17);
   memcpy(httpAESEncryptionKey, freeEr16, 17);
+  memcpy(UDID, freeEr32, 33);
+
+  if(strlen(udid)<=32)
+  {
+    memcpy(UDID, udid, strlen(udid));
+    memcpy(httpAESEncryptionKey, udid, AES_IV_LENGTH);
+  }
+  else
+  Serial.println("udid wrong length");
 
   httpBaseURL = baseURL;
 
@@ -499,36 +503,64 @@ bool DoorAccesPhases::Phase3(String& ndefPayBuff)
             Serial.print("\nfinished\nUTID:\t");
             Serial.println((char*)nfcUTIDnotStored);
 
-            Serial.println("--------------reading UTID from NFC competed--------------");
+            Serial.println("--------------competed reading UTID from NFC --------------");
             Serial.println("------going to prepare httpMessage to forward UTID--------");
             char* userKeys = &nfcUUID[0];
-            char KeyHash[cypherLen+1];
-            char TDAT3[] = "testTDAT3";
+            //Serial.printf("cypherLen: %d\n", (cypherLen));
+
+            char keyHash[cypherLen+1];
+            unsigned char aes128BufferLen = cypherLen*2+1+cypherLen-1;  //(cypherLen*2)from 32 to 64 bit (+1) for 1 Null byte + (cypherLen-1) for 31 ' ' between two hex digits
+            char TDAT3[] = "testTDAT";
+
+            Serial.print("httpAESEncryptionKey:\t");
+            Serial.print((char*)httpAESEncryptionKey);
+            Serial.print("\t");
+            printBlock((uint8_t*)httpAESEncryptionKey,16);
+
+            Serial.print("httpAESIV:\t");
+            Serial.print((char*)httpAESIV);
+            Serial.print("\t");
+            printBlock((uint8_t*)httpAESIV,16);
+
+            Serial.print("nfcUTIDnotStored:\t");
+            Serial.print((char*)nfcUTIDnotStored);
+            Serial.print("\t");
+            printBlock((uint8_t*)nfcUTIDnotStored,32);
 
             AES aesEncryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
-            aesEncryptor.process((uint8_t*)nfcUTIDnotStored, (uint8_t*)KeyHash, cypherLen);
+            aesEncryptor.process((uint8_t*)nfcUTIDnotStored, (uint8_t*)keyHash, cypherLen);
 
-            Serial.print("userKeys:\t");
+
+            //Serial.printf("cypherLen:\t %d\n", cypherLen);
+            //Serial.printf("KeyHashBufferLen %d\n", aes128BufferLen);
+            char aes128Buffer[aes128BufferLen]; //(cypherLen*2)from 32 to 64 bit (+1) for 1 Null byte + (cypherLen-1) for 31 ' ' between two hex digits
+            for (unsigned int i = 0 ; i<cypherLen; i++)
+                sprintf(&aes128Buffer[i*3], "%02X ",keyHash[i]);
+            aes128Buffer[aes128BufferLen-1] = 0; //get 0 string ending. overwriting last ' '
+
+            Serial.printf("UserKeys:\t (%d bytes)", nfcUUIDLen-1);
             Serial.print(userKeys);
-            printBlock((uint8_t*)userKeys,nfcUUIDLen);
+            printBlock((uint8_t*)userKeys,nfcUUIDLen-1);
 
-            Serial.print("KeyHash:\t");
-            //Serial.print(KeyHash);
-            printBlock((uint8_t*)KeyHash,cypherLen);
+            Serial.printf("KeyHash:\t (%d bytes)",  strlen(aes128Buffer));
+            Serial.print(aes128Buffer);
+            printBlock((uint8_t*)aes128Buffer,strlen(aes128Buffer));
 
-            Serial.print("userKeys:\t");
+            Serial.printf("TDAT3:\t (%d bytes)", strlen(TDAT3));
             Serial.print(TDAT3);
-            printBlock((uint8_t*)TDAT3,strlen(TDAT3));
+            printBlock((uint8_t*)TDAT3,strlen(TDAT3)-1);
 
+            //char test[] = "abcdef";
+            //char test2[] ="12345";
             HTTPClient http;
             String path = "DoorAcContPhase3/";
             String headerType = "content-type";
             String hexDigStr =  getRnd32hexDigString();
-            String boundary = "--------------------------" + hexDigStr;
+            String boundary  = "--------------------------" + hexDigStr;
             String headerStr = "multipart/form-data; boundary=" + boundary;
             String content1  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+String(userKeys)+"\r\n";
-            String content2  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"KeyHash\"\r\n\r\n"+String(KeyHash)+"\r\n";
-            String contetn3 = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"TDAT3\"\r\n\r\n"+String(TDAT3)+"\r\n"+"--"+boundary+"--\r\n";
+            String content2  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"keyHash\"\r\n\r\n"+String(aes128Buffer)+"\r\n";
+            String contetn3  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"TDAT3\"\r\n\r\n"+String(TDAT3)+"\r\n"+"--"+boundary+"--\r\n";
             String body = content1 +content2 +contetn3;
 
             http.begin(httpBaseURL + path);

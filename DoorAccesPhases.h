@@ -39,7 +39,7 @@ class DoorAccesPhases {
         // char TDAT[32];
         #define UDIDLen 17
         uint8_t UDID[UDIDLen];
-        #define nfcUUIDLen 33
+        #define nfcUUIDLen 21
         char nfcUUID[nfcUUIDLen];
         #define nfcAESEncryptionKeyLen 17
         uint8_t nfcAESEncryptionKey[nfcAESEncryptionKeyLen];

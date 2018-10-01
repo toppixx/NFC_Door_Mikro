@@ -124,10 +124,10 @@ void setupOTAFirmwareUpdate(void)
 void setup(void) {
   //setup WIFI stuff
   //setup default Ip Url things
-  for (char i=0; i<10;i++)
-  {
-    delay(1000);
-  }
+  // for (char i=0; i<10;i++)
+  // {
+  //   delay(1000);
+  // }
   // while (Serial.available() == 0)
   // {
   //   yield();
@@ -290,7 +290,7 @@ void loop(void) {
 
 
     Serial.println("\n-----------\n");
-    delay(500); //avoid http POST flooding
+    delay(100); //avoid http POST flooding
 
   }
 
