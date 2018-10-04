@@ -271,13 +271,17 @@ void loop(void) {
                   String NfcTagJsonedData = ndefPayStr;
 
                   Serial.println("NFC-Tag was read, structured and stored successfully\n");
-
-                  doorAccesPhases.Phase1(tag.getUidString().c_str());
+                  bool stater = false;
+                  if(stater != doorAccesPhases.Phase1(tag.getUidString().c_str()))
+                  {
                   Serial.println("=========================================");
-                  doorAccesPhases.Phase2();
-                  Serial.println("=========================================");
-                  doorAccesPhases.Phase3(NfcTagJsonedData);
-                  Serial.println("=========================================");
+                    if(stater != doorAccesPhases.Phase2())
+                    {
+                      Serial.println("=========================================");
+                      doorAccesPhases.Phase3(NfcTagJsonedData);
+                      Serial.println("=========================================");
+                    }
+                  }
                 }
             else
             Serial.println("read of NFCtag: was corrupted");

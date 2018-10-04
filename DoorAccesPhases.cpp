@@ -50,7 +50,8 @@ void DoorAccesPhases::init(const char* udid, String baseURL, String permissionSt
   else
     Serial.println("udid wrong length");
   if(permissionStr.length()==32)
-    permissionStr.toCharArray(doorPermission, permissionStr.length());
+
+    permissionStr.toCharArray(doorPermission, permissionStr.length()+1);
   else
     Serial.println("permissionStr wrong length");
 
@@ -609,26 +610,70 @@ bool DoorAccesPhases::Phase3(String& ndefPayBuff)
                     {
                       Serial.println("encrypted doorAccesToken:");
                       Serial.println(doorAccesToken);
-                      char decToken[128];
-                      AES aesDecryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
-                      aesDecryptor.process((uint8_t*)doorAccesToken, (uint8_t*)decToken, strlen(doorAccesToken));
+                      //char decToken[128];
+                      //AES aesDecryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
+                      //aesDecryptor.process((uint8_t*)doorAccesToken, (uint8_t*)decToken, strlen(doorAccesToken));
 
-                      Serial.print("decrypted doorAccesToken:");
-                      Serial.println(doorAccesToken);
+                      //Serial.print("decrypted doorAccesToken:");
+                      //Serial.println(decToken);
 
-                      String toHashStr = String(httpTDAT) + String(doorPermission);//toHashStr = (self.TDAT+door.permissionStr)
-                      char toHashChar[toHashStr.length()+1];
-                      toHashStr.toCharArray(toHashChar,toHashStr.length());
+                      unsigned char sha256length = 32;
+                      uint8_t plainUDID_TDATlength = UDIDLen +httpTDATLen;
+                      char toHashChar[httpTDATLen+doorPermissionLen];
+                      memcpy(&toHashChar[0], httpTDAT, httpTDATLen);
+                      memcpy(&toHashChar[httpTDATLen-1], doorPermission, doorPermissionLen);
+
+
+                      // String toHashStr = String(httpTDAT) + String(doorPermission);//toHashStr = (self.TDAT+door.permissionStr)
+                      // char toHashChar[toHashStr.length()+1];
+                      // toHashStr.toCharArray(toHashChar,toHashStr.length());
                       byte sha256Hash[33];
 
                       SHA256 shaHashen = SHA256();
 
+                      // Serial.print("toHashStr:\t");
+
+                      // Serial.println(toHashStr);
+                      Serial.print("String(httpTDAT):\t");
+                      Serial.println(String(httpTDAT));
+
+                      Serial.print("String(doorPermission:\t");//toHashStr = (self.TDAT+door.permissionStr)
+                      Serial.println(String(doorPermission));//toHashStr = (self.TDAT+door.permissionStr)
+
+                      Serial.print("httpTDAT.length():\t");
+                      Serial.println(String(httpTDAT).length());
+                      Serial.print("doorPermission.length():\t");
+                      Serial.println(String(doorPermission).length());
+                      Serial.print("strlen(doorPermission):\t");
+                      Serial.println(strlen(doorPermission));
+                      Serial.print("strlen(toHashChar):\t");
+                      Serial.println(strlen(toHashChar));
+                      Serial.print("toHashChar:\t");
+                      Serial.println(toHashChar);
                       shaHashen.doUpdate(toHashChar);
                       shaHashen.doFinal(sha256Hash);
                       Serial.print("hashedStr:\t");
                       Serial.println((char*)sha256Hash);
 
+                      char aes128Buffer[65]; //(cypherLen*2)from 32 to 64 bit (+1) for 1 Null byte + (cypherLen-1) for 31 ' ' between two hex digits
+                      for (unsigned int i = 0 ; i<32; i++)
+                          sprintf(&aes128Buffer[i*2], "%02X",sha256Hash[i]);
+                      printBlock((uint8_t*)aes128Buffer,strlen(aes128Buffer)-1);
+
+                      aes128Buffer[65-1] = 0;
+                      Serial.print("aes128Buffer:\t");
+                      Serial.println(aes128Buffer);
+
+                      char decToken[65];
+
+                      AES aesEncryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
+                      aesDecryptor.process((uint8_t*)aes128Buffer, (uint8_t*)decToken, strlen(doorAccesToken));
                       //compare recieved and calculated string
+                      Serial.print("encToken:\t");
+                      Serial.println(decToken);
+                      printBlock((uint8_t*)decToken,strlen(decToken)-1);
+
+
                     }
                     else
                       Serial.println("doorAccesToken wrong size");
