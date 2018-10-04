@@ -22,7 +22,7 @@ DoorAccesPhases::DoorAccesPhases()
 
 DoorAccesPhases::~DoorAccesPhases(){}
 
-void DoorAccesPhases::init(const char* udid, String baseURL)
+void DoorAccesPhases::init(const char* udid, String baseURL, String permissionStr)
 {
   char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
   char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -42,13 +42,17 @@ void DoorAccesPhases::init(const char* udid, String baseURL)
   memcpy(httpAESEncryptionKey, freeEr16, 17);
   memcpy(UDID, freeEr32, 33);
 
-  if(strlen(udid)<=32)
+  if(strlen(udid)==16)
   {
     memcpy(UDID, udid, strlen(udid));
     memcpy(httpAESEncryptionKey, udid, AES_IV_LENGTH);
   }
   else
-  Serial.println("udid wrong length");
+    Serial.println("udid wrong length");
+  if(permissionStr.length()==32)
+    permissionStr.toCharArray(doorPermission, permissionStr.length());
+  else
+    Serial.println("permissionStr wrong length");
 
   httpBaseURL = baseURL;
 
@@ -178,7 +182,11 @@ bool DoorAccesPhases::Phase2()
   Serial.print("SHA256 Hexed:\t");
   Serial.println(keyHash);
 
-  String TDAT2 = "TDATtest";
+  //---------TDAT----------
+  // tdatChecker = TDATchecker();
+  // httpTDAT = tdatChecker.update(httpTDAT, passphrase, iv);  //String TDATchecker::update(String oldTDAT, String passphrase, String iv)
+
+
   HTTPClient http;
   String headerType = "content-type";
   String hexDigStr =  getRnd32hexDigString();
@@ -186,7 +194,7 @@ bool DoorAccesPhases::Phase2()
   String headerStr = "multipart/form-data; boundary=" + boundary;
   String content1  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+String(nfcUUID)+"\r\n";
   String content2  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"keyHash\"\r\n\r\n"+String(keyHash)+"\r\n";
-  String contetn3 = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"TDAT2\"\r\n\r\n"+String(TDAT2)+"\r\n"+"--"+boundary+"--\r\n";
+  String contetn3 = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"TDAT2\"\r\n\r\n"+String(httpTDAT)+"\r\n"+"--"+boundary+"--\r\n";
   String body = content1 +content2 +contetn3;
 
 
@@ -498,7 +506,9 @@ bool DoorAccesPhases::Phase3(String& ndefPayBuff)
             //Serial.println((char*)nfcAESEncryptionKey);
 
             //TODO give the right names  Change all the length def to 32 and make +1 while init and creation
-            char nfcUTIDnotStored[cypherLen+1];
+            Serial.print("cypherLen:\t");
+            Serial.println();
+            char nfcUTIDnotStored[cypherLen+1];// = {0};
             memcpy(nfcUTIDnotStored, decrypted, cypherLen);
             Serial.print("\nfinished\nUTID:\t");
             Serial.println((char*)nfcUTIDnotStored);
@@ -576,6 +586,65 @@ bool DoorAccesPhases::Phase3(String& ndefPayBuff)
             else
             {
               String httpRespo = http.getString();
+
+              if(httpRespo.length()<180)
+              {
+                StaticJsonBuffer<180> jsonBuffer;
+                JsonObject& jsonObject = jsonBuffer.parseObject(httpRespo);
+                //Serial.println("Jsoned");
+
+                if (!jsonObject.success())
+                {
+                  Serial.println("parseObject() failed");
+                  return false;
+                }
+                else
+                {
+                  const char* doorAccesToken = jsonObject["accessToken"];
+                  //Serial.println(tdatArr);
+                  //Serial.println("get returnToken");
+                  if (doorAccesToken)
+                  {
+                    if((String(doorAccesToken).length()) ==128)
+                    {
+                      Serial.println("encrypted doorAccesToken:");
+                      Serial.println(doorAccesToken);
+                      char decToken[128];
+                      AES aesDecryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
+                      aesDecryptor.process((uint8_t*)doorAccesToken, (uint8_t*)decToken, strlen(doorAccesToken));
+
+                      Serial.print("decrypted doorAccesToken:");
+                      Serial.println(doorAccesToken);
+
+                      String toHashStr = String(httpTDAT) + String(doorPermission);//toHashStr = (self.TDAT+door.permissionStr)
+                      char toHashChar[toHashStr.length()+1];
+                      toHashStr.toCharArray(toHashChar,toHashStr.length());
+                      byte sha256Hash[33];
+
+                      SHA256 shaHashen = SHA256();
+
+                      shaHashen.doUpdate(toHashChar);
+                      shaHashen.doFinal(sha256Hash);
+                      Serial.print("hashedStr:\t");
+                      Serial.println((char*)sha256Hash);
+
+                      //compare recieved and calculated string
+                    }
+                    else
+                      Serial.println("doorAccesToken wrong size");
+                    }
+                  else
+                  Serial.println("couldnt get doorAccesToken");
+                }
+                }
+                else
+                {
+                Serial.println("jsonBuffer to small");
+                return false;
+              }
+
+
+
               Serial.println(httpRespo);
               Serial.println("==============Phase 3 finished===============");
               return true;

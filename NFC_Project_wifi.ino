@@ -42,6 +42,8 @@
 #include <DoorAccesPhases.h>
 
 char ownUDID[] = "wozyATrFS9OJ71Vw";
+String permissionStr = "KxQpUwZe8UTAVbp5M74Qz0oQtuqPmjkm";
+
 void unlock();
 //userbutton reset for connecting to new WIFI
 void resetToFactoryDefaults();
@@ -206,7 +208,7 @@ void setup(void) {
   Serial.println("Waiting for an ISO14443A card");
   Serial.println("\n-----------\n");
 
-  doorAccesPhases.init(ownUDID, BASE_URL);
+  doorAccesPhases.init(ownUDID, BASE_URL, permissionStr);
   //doorAccesPhases.Phase1("99qIN0M", BASE_URL);
   //doorAccesPhases.Phase2();
   //doorAccesPhases.Phase3("nfcTagMessage");

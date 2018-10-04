@@ -12,7 +12,7 @@ class DoorAccesPhases {
         // bool Phase2(void);
         // bool Phase3(void);
         // void reset(void);
-        void init(const char* udid, String baseURL); //evtl auf 32Byte prüfen
+        void init(const char* udid, String baseURL, String permissionStr); //evtl auf 32Byte prüfen
         bool Phase1(const char* uuid);
         bool Phase2(void);
         bool Phase3(String& ndefPayBuff);
@@ -51,11 +51,13 @@ class DoorAccesPhases {
         char nfcDataLoad[nfcDataLoadLen];
         String httpBaseURL;
         #define httpTDATLen 33
-        uint8_t httpTDAT[httpTDATLen];
+        char httpTDAT[httpTDATLen];
         #define httpAESIVLen 17
         uint8_t httpAESIV[httpAESIVLen];
         #define httpAESEncryptionKeyLen 17
         uint8_t httpAESEncryptionKey[httpAESEncryptionKeyLen];
+        #define doorPermissionLen 33
+        char doorPermission[doorPermissionLen];
 
 };
 #endif
