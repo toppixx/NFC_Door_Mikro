@@ -182,7 +182,7 @@ bool DoorAccesPhases::Phase2()
   for (unsigned int i = 0 ; i<32; i++)
       sprintf(&keyHash[i*2], "%02X",sha256Buffer[i]);
 
-  Serial.print("SHA256 Hexed:\t");
+  Serial.print("SHA256 Hash (hex):\t");
   Serial.println(keyHash);
   Serial.println("-----------------------------------------------------------");
 
