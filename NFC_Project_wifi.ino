@@ -237,6 +237,13 @@ void loop(void) {
 */
     if (nfcAdapter.tagPresent())
     {
+      Serial.println("\n\n\n################################################");
+      Serial.println("!!!!!!!!!!!**************************!!!!!!!!!!!");
+      Serial.println("                NEW NFC-TAG READ");
+      Serial.println("!!!!!!!!!!!**************************!!!!!!!!!!!");
+      Serial.println("################################################\n\n");
+
+
         Serial.println("\nScan a NFC tag\n");
 
         NfcTag tag = nfcAdapter.read();
@@ -270,16 +277,15 @@ void loop(void) {
                 {
                   String NfcTagJsonedData = ndefPayStr;
 
-                  Serial.println("NFC-Tag was read, structured and stored successfully\n");
+                  Serial.println("NFC-Tag was read, structured and stored successfully");
                   bool stater = false;
                   if(stater != doorAccesPhases.Phase1(tag.getUidString().c_str()))
                   {
-                  Serial.println("=========================================");
+                    Serial.println("==================================Ending Phase 1=====================================\n\n");
                     if(stater != doorAccesPhases.Phase2())
                     {
-                      Serial.println("=========================================");
+                      Serial.println("==================================Ending Phase 2=====================================\n\n");
                       doorAccesPhases.Phase3(NfcTagJsonedData);
-                      Serial.println("=========================================");
                     }
                   }
                 }
@@ -305,53 +311,6 @@ void loop(void) {
   //else yield(); // PN532 probably timed out waiting for a card.. let's let the ESPcore handle wifi stuff
   while (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength)) yield(); //let ESPcore handle wifi stuff
 }
-
-
-// // ############# HTTP REQUEST ################ //
-// void httpRequest(String path, String body)
-// {
-//   String payload = makeRequest(path, body);
-//
-//   if (!payload) {
-//     return;
-//   }
-//   Serial.println("##[RESULT]## ==> " + payload);
-// }
-
-// String makeRequest(String path, String body)
-// {
-//   http.begin(BASE_URL + path);
-//   http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
-//   body = "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a\n\r------NFCtagHandleBoundary15gabfalsd091590a\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\n"+body+"\r\n------NFCtagHandleBoundary15gabfalsd091590a--";
-//   http.addHeader("content-type", "multipart/form-data; boundary=----NFCtagHandleBoundary15gabfalsd091590a");
-//   //http.addParameter("multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW", "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"nfc_tag\"\r\n\r\nA9:CD:85:89\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW--");
-//   Serial.println(http.getString());
-//
-//   int httpCode = http.POST(body);
-//
-//   if (httpCode < 0) {
-//     Serial.println("request error - " + httpCode);
-//     Serial.println(http.errorToString(httpCode));
-//
-//     return http.errorToString(httpCode);
-//
-//   }
-//   Serial.println(http.getString());
-//
-//   if (httpCode != HTTP_CODE_OK) {
-//     return http.errorToString(httpCode);
-//   }
-//   return "";
-// }
-//###############GET REQUEST#############
-// void httpGet(String path)
-// {
-//    http.begin(BASE_URL + path);
-//   http.addHeader("Authorization", "Token b454942f1ecdc11fc8c1b1a3c2c3b8c5203d805f");
-//   int httpCode = http.GET();
-//
-//   return;
-// }
 
 //code from https://github.com/tzapu/WiFiManager/issues/142
 void resetToFactoryDefaults() {
