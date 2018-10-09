@@ -37,8 +37,8 @@ class TDATchecker {
         TDATchecker();
         ~TDATchecker();
         String init();
-        String update(String oldTDAT, String passphrase, String iv);
-        bool check(String incTDAT, String oldTDAT, String passphrase, String iv);
+        String calcSignature(const char* signature, const uint8_t* iv, const uint8_t* encKey); //sigSTring should be TDAT, but could be also include further charecters
+        bool check(String incomingSignature, const char* oldSignature, const uint8_t* iv, const uint8_t* encKey);
 
 
 

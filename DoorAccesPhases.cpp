@@ -4,6 +4,7 @@
 #include "Utils.h"
 #include <ESP8266HTTPClient.h>
 #include "ArduinoJson.h"
+#include "TDATchecker.h"
 DoorAccesPhases::DoorAccesPhases()
 {
   char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -26,7 +27,7 @@ void DoorAccesPhases::init(const char* udid, String baseURL, String permissionSt
 {
   char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
   char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-
+  char freeEr64[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
   //char keyHash[65] = "";
   //for (unsigned int i = 0 ; i<32; i++)
@@ -37,7 +38,7 @@ void DoorAccesPhases::init(const char* udid, String baseURL, String permissionSt
   memcpy(nfcAESEncryptionKey, freeEr16, 17);
   memcpy(nfcAESIV, freeEr16, 17);
   memcpy(nfcDataLoad, freeEr32, 33);
-  memcpy(httpTDAT, freeEr32, 33);
+  memcpy(httpTDAT, freeEr64, 65);
   memcpy(httpAESIV, freeEr16, 17);
   memcpy(httpAESEncryptionKey, freeEr16, 17);
   memcpy(UDID, freeEr32, 33);
@@ -58,24 +59,6 @@ void DoorAccesPhases::init(const char* udid, String baseURL, String permissionSt
   httpBaseURL = baseURL;
 
 }
-
-/*for the future not implemented at server yet*/
-// unsigned char rndsha256Length = 32;
-// unsigned char rndsha256Buffer[32] ="";
-// getRndSha256(rndsha256Buffer, rndsha256Length);
-//
-// unsigned char sha256UUIDLength = 32;
-// unsigned char sha256UUIDBuffer[32] = "";
-//
-// unsigned char shaUUIDplainLength = 64;
-// unsigned char shaUUIDplainTxt[64] =  "";
-// memcpy(&shaUUIDplainTxt[0],rndsha256Buffer,rndsha256Length);
-// memcpy(&shaUUIDplainTxt[32],nfcUUID, nfcUUIDLength);
-// Sha256Class sha256Hasher = Sha256Class();
-// sha256Hasher.init();
-// sha256Hasher.initHmac((const unsigned char*) shaUUIDplainTxt, shaUUIDplainLength);
-// memcpy(sha256UUIDBuffer,sha256Hasher.resultHmac(), sha256UUIDLength);
-//sha256UUIDBuffer need to be send to server with rndsha256Buffer
 
 bool DoorAccesPhases::Phase1(const char* uuid)
 {
@@ -112,9 +95,9 @@ bool DoorAccesPhases::Phase1(const char* uuid)
   {
     String httpRespo = http.getString();
 
-    if(httpRespo.length()<400)
+    if(httpRespo.length()<200)
     {
-      StaticJsonBuffer<400> jsonBuffer;
+      StaticJsonBuffer<200> jsonBuffer;
       JsonObject& jsonObject = jsonBuffer.parseObject(httpRespo);
 
       if (!jsonObject.success())
@@ -124,27 +107,64 @@ bool DoorAccesPhases::Phase1(const char* uuid)
       }
       else
       {
+        trennlinie();
         Serial.println("print http respons");
         Serial.println(httpRespo);
+        trennlinie();
         const char* tdatArr = jsonObject["returnToken"];
-
+        const char* aesIV = jsonObject["iv"];
+        bool sucConvAESIV = false;
         if (tdatArr)
         {
-          if((String(tdatArr).length()) ==32)
+          if((String(tdatArr).length()) ==64)
           {
             memcpy(httpTDAT, tdatArr, strlen(tdatArr)+1);
+            httpTDAT[strlen(tdatArr)]=0;
             Serial.print("\nrecieved and Stored returnToken as TDAT\nTDAT:\t");
             Serial.println((char*)httpTDAT);
           }
           else
+          {
             Serial.println("TDAT wrong size");
+            return false;
           }
+        }
         else
-        Serial.println("couldnt get returnToken");
+        {
+          Serial.println("no returnToken in JsonBuffer");
+          return false;
+        }
+
+        if (aesIV)
+        {
+          byte ivBuffer[AES_IV_LENGTH+1];
+          sucConvAESIV = convertStringToByteArr(aesIV, ivBuffer, AES_IV_LENGTH);
+          if(sucConvAESIV)
+          {
+            Serial.println(aesIV);
+            Serial.println((char*)ivBuffer);
+            memcpy(httpAESIV, ivBuffer, AES_IV_LENGTH);
+            httpAESIV[AES_IV_LENGTH]=0;
+
+            Serial.print("\nrecieved and Stored iv\nhttpAESIV:\t");
+            Serial.println((char*)httpAESIV);
+            printBlock(ivBuffer, AES_IV_LENGTH);
+          }
+          else
+          {
+            Serial.println("converting iv failed");
+            return false;
+          }
+        }
+        else
+        {
+          Serial.println("no iv in JsonBuffer");
+          return false;
+        }
       }
-      }
-      else
-      {
+    }
+    else
+    {
       Serial.println("jsonBuffer to small");
       return false;
     }
@@ -163,52 +183,68 @@ bool DoorAccesPhases::Phase2()
   unsigned char sha256length = 32;
   uint8_t sha256Buffer[65] ="";
   char keyHash[65] ="";
-  uint8_t plainUDID_TDATlength = UDIDLen +httpTDATLen;
-  char plainUDID_TDATbuffer[plainUDID_TDATlength+1];
-  memcpy(&plainUDID_TDATbuffer[0], httpTDAT, httpTDATLen);
-  memcpy(&plainUDID_TDATbuffer[httpTDATLen-1], UDID, UDIDLen);
-  Serial.println("-----------------------------------------------------------");
-  Serial.println("Local SHA256 Generation\n");
+  keyHash[64] =0;
 
-  Serial.print("TDAT:\t\t");
-  Serial.println((char*)httpTDAT);
-  Serial.print("UDID:\t\t");
-  Serial.println((char*)UDID);
-  Serial.print("TDAT+UDID:\t");
-  Serial.println(plainUDID_TDATbuffer);
+  do {//heap shonen
+    uint8_t plainUDID_TDATlength = UDIDLen +httpTDATLen;
+    char plainUDID_TDATbuffer[plainUDID_TDATlength+1];
+    memcpy(&plainUDID_TDATbuffer[0], httpTDAT, httpTDATLen);
+    memcpy(&plainUDID_TDATbuffer[httpTDATLen-1], UDID, UDIDLen);
+    trennlinie();
+    Serial.println("Local SHA256 Generation\n");
 
-  sha256Calc(plainUDID_TDATbuffer, sha256Buffer, sha256length);
+    Serial.print("TDAT:\t\t");
+    Serial.println((char*)httpTDAT);
+    Serial.print("UDID:\t\t");
+    Serial.println((char*)UDID);
+    Serial.print("TDAT+UDID:\t");
+    Serial.println(plainUDID_TDATbuffer);
 
-  for (unsigned int i = 0 ; i<32; i++)
-      sprintf(&keyHash[i*2], "%02X",sha256Buffer[i]);
+    sha256Calc(plainUDID_TDATbuffer, sha256Buffer, sha256length);
 
-  Serial.print("SHA256 Hash (hex):\t");
-  Serial.println(keyHash);
-  Serial.println("-----------------------------------------------------------");
+    for (unsigned int i = 0 ; i<32; i++)
+        sprintf(&keyHash[i*2], "%02X",sha256Buffer[i]);
+
+    Serial.print("SHA256 Hash (hex):\t");
+    Serial.println(keyHash);
+    trennlinie();
+    trennlinie();
+    Serial.println("calculating new TDAT (TDAT2)");
+    TDATchecker tdatChecker = TDATchecker();
+    String TDAT2 = tdatChecker.calcSignature(httpTDAT, httpAESIV, httpAESEncryptionKey);
+    TDAT2.toCharArray(httpTDAT, httpTDATLen);
+    trennlinie();
+  } while(false);
 
   HTTPClient http;
-  String headerType = "content-type";
-  String hexDigStr =  getRnd32hexDigString();
-  String boundary = "--------------------------" + hexDigStr;
-  String headerStr = "multipart/form-data; boundary=" + boundary;
-  String content1  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+String(nfcUUID)+"\r\n";
-  String content2  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"keyHash\"\r\n\r\n"+String(keyHash)+"\r\n";
-  String contetn3 = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"TDAT2\"\r\n\r\n"+String(httpTDAT)+"\r\n"+"--"+boundary+"--\r\n";
-  String body = content1 +content2 +contetn3;
+  int httpCode;
+  do { // heap shonen
+    /* code */
 
-  Serial.println("-----------------------------------------------------------");
-  Serial.println("send http request to the Server");
-  Serial.println("using the userKeys, SHA256(TDAT+UDID) keyHash, and TDAT2");
-  Serial.println("http Body:");
-  Serial.println("************************** Start *************************\n");
-  Serial.println(body);
+    String headerType = "content-type";
+    String hexDigStr =  getRnd32hexDigString();
+    String boundary = "--------------------------" + hexDigStr;
+    String headerStr = "multipart/form-data; boundary=" + boundary;
+    String content1  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+String(nfcUUID)+"\r\n";
+    String content2  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"keyHash\"\r\n\r\n"+String(keyHash)+"\r\n";
+    String contetn3 = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"TDAT2\"\r\n\r\n"+String(httpTDAT)+"\r\n"+"--"+boundary+"--\r\n";
+    String body = content1 +content2 +contetn3;
 
-  Serial.println("*************************** End **************************\n");
-  Serial.println("-----------------------------------------------------------");
+    trennlinie();
+    Serial.println("send http request to the Server");
+    Serial.println("using the userKeys, SHA256(TDAT+UDID) keyHash, and TDAT2");
+    Serial.println("http Body:");
+    Serial.println("************************** Start *************************\n");
+    Serial.println(body);
 
-  http.begin(httpBaseURL + path);
-  http.addHeader(headerType, headerStr);
-  int httpCode = http.POST(body);
+    Serial.println("*************************** End **************************\n");
+    trennlinie();
+
+    http.begin(httpBaseURL + path);
+    http.addHeader(headerType, headerStr);
+    int httpCode = http.POST(body);
+  } while(false);
+
   if (httpCode < 0)
   {
     Serial.println("request error - " + httpCode);
@@ -220,6 +256,11 @@ bool DoorAccesPhases::Phase2()
     String httpRespo = http.getString();
     if(httpRespo.length()<200)
     {
+      trennlinie();
+      Serial.println("http Return from HttpRequest\n");
+      Serial.println(httpRespo);
+      trennlinie();
+
       StaticJsonBuffer<200> jsonBuffer;
       JsonObject& jsonObject = jsonBuffer.parseObject(httpRespo);
 
@@ -234,83 +275,52 @@ bool DoorAccesPhases::Phase2()
         #define AES_KEY_LENGTH 16
         #define AES_IV_LENGTH 16
         const char* aesCypher = jsonObject["cypher"];
-        const char* aseIV = jsonObject["iv"];
+        bool succAEScypher = false;
+        if (aesCypher)
+        {
+            uint8_t cpyheredTextLen = strlen(aesCypher);
+            uint8_t cypheredText[cpyheredTextLen];
+            uint8_t cypherLen = cpyheredTextLen/2;
+            uint8_t cypher[cypherLen];
+            succAEScypher = convertStringToByteArr(aesCypher, cypher, cypherLen);
 
-        //  Serial.println("get  iv");
-        //TODO aes IV Json convertieren sauberer machen jeweils eigenen IF für fail und gesamte abfrage form nächsten Schritt
-        //TODO beispiel sieheh Phase 3 schematisch 1 zu 1 übernhemen
-          if (aseIV)
-          {
-            byte ivBuffer[AES_IV_LENGTH+1];
-            bool sucConvAESIV = convertStringToByteArr(aseIV, ivBuffer, AES_IV_LENGTH);
-            if(sucConvAESIV)
+            if(succAEScypher)
             {
-              memcpy(httpAESIV, ivBuffer, AES_IV_LENGTH);
-              Serial.println("-----------------------------------------------------------");
-              Serial.println("http Return from HttpRequest\n");
-              Serial.println(httpRespo);
-              Serial.println("-----------------------------------------------------------");
-
-              Serial.println("-----------------------------------------------------------");
-
+              trennlinie();
               Serial.println("going to decrypt the encyphered NFC-AES-Key from the httpMessage\n");
+              uint8_t * keyEncrypt = UDID;
+              char decrypted[cypherLen];
 
+              Serial.print("httpAESEncryptionKey:\t");
+              Serial.print((char*)keyEncrypt);
+              printBlock(keyEncrypt,16);
+              Serial.print("httpAESIV:\t\t");
+              Serial.print((char*)httpAESIV);
+              printBlock(httpAESIV, 16);
+              Serial.print("cypher:\t\t\t");
+              printBlock(cypher, cypherLen);
 
+              AES aesDecryptor(keyEncrypt, httpAESIV, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
+              aesDecryptor.process((uint8_t*)cypher, (uint8_t*)decrypted, cypherLen);
+              decrypted[cypherLen] = 0;
+              Serial.println("\ndecrypted NFC-AES-Key");
+              Serial.print("plainText: ");
+              Serial.println((char*)decrypted);
+              trennlinie();
+
+              memcpy(nfcAESEncryptionKey, decrypted, nfcAESEncryptionKeyLen-1);
             }
             else
             {
-              Serial.println("converting iv failed");
+              Serial.println("converting cypher failed");
               return false;
             }
           }
           else
           {
-            Serial.println("couldnt get iv");
+            Serial.println("couldnt get cypher");
             return false;
           }
-          if (aesCypher)
-          {
-              uint8_t cpyheredTextLen = strlen(aesCypher);
-              uint8_t cypheredText[cpyheredTextLen];
-              uint8_t cypherLen = cpyheredTextLen/2;
-              uint8_t cypher[cypherLen];
-              bool succAEScypher = convertStringToByteArr(aesCypher, cypher, cypherLen);
-
-              if(succAEScypher)
-              {
-                uint8_t * keyEncrypt = UDID;
-                char decrypted[cypherLen];
-
-                Serial.print("httpAESEncryptionKey:\t");
-                Serial.print((char*)keyEncrypt);
-                printBlock(keyEncrypt,16);
-                Serial.print("httpAESIV:\t\t");
-                Serial.print((char*)httpAESIV);
-                printBlock(httpAESIV, 16);
-                Serial.print("cypher:\t\t\t");
-                printBlock(cypher, cypherLen);
-
-                AES aesDecryptor(keyEncrypt, httpAESIV, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
-                aesDecryptor.process((uint8_t*)cypher, (uint8_t*)decrypted, cypherLen);
-                decrypted[cypherLen] = 0;
-                Serial.println("\ndecrypted NFC-AES-Key");
-                Serial.print("plainText: ");
-                Serial.println((char*)decrypted);
-                Serial.println("-----------------------------------------------------------");
-
-                memcpy(nfcAESEncryptionKey, decrypted, nfcAESEncryptionKeyLen-1);
-              }
-              else
-              {
-                Serial.println("converting cypher failed");
-                return false;
-              }
-            }
-            else
-            {
-              Serial.println("couldnt get cypher");
-              return false;
-            }
           // decrypt
         }
       }
@@ -334,8 +344,12 @@ bool DoorAccesPhases::Phase3(String& ndefPayBuff)
   Serial.println("on the Local side we will calculate the same Hash and check against each other");
   Serial.println("The Permission=True Hash depends on the TDAT of the Access Request and a permissionTrue value thats unique to every door");
   Serial.println("This Hash is calculated as SHA256(AES128(TDAT+PermissionString, httpAESEncryptionKey))\n");
-  Serial.println("-----------------------------------------------------------");
+  trennlinie();
   Serial.println("extracting Data of the NFC-Tag\n");
+  bool sucConvAESIV  = false;
+  bool succAEScypher  = false;
+  uint8_t cypherLen = 0;
+
   if((ndefPayBuff.length())<150)
   {
     StaticJsonBuffer<150> jsonBuffer;
@@ -354,10 +368,8 @@ bool DoorAccesPhases::Phase3(String& ndefPayBuff)
     {
       //#TODO give some nice Names
       const char* nfcAesCypherJson = jsonObject["cipher"];
-      uint8_t cypherLen = 0;
       const char* nfcAesIvJson = jsonObject["iv"];
-      bool succAEScypher = false;
-      bool sucConvAESIV  = false;
+
 
         if (nfcAesIvJson)
         {
@@ -400,218 +412,248 @@ bool DoorAccesPhases::Phase3(String& ndefPayBuff)
         {
             Serial.println("couldnt find cipher Entry in Json");
         }
-        Serial.println("-----------------------------------------------------------");
-        Serial.println("-----------------------------------------------------------");
-
-          Serial.println("Starting to decrypt the NFC-Tag-Data\n");
-          if( succAEScypher && sucConvAESIV)
-          {
-            char decrypted[cypherLen+1];
-
-            Serial.print("NFC-AES-Key:\t");
-            Serial.print((char*)nfcAESEncryptionKey);
-            printBlock(nfcAESEncryptionKey,16);
-            Serial.print("nfcAESIV:\t");
-            Serial.print((char*)nfcAESIV);
-            printBlock((uint8_t*)nfcAESIV, 16);
-            Serial.print("cypher:\t\t");
-            printBlock((uint8_t*)nfcAESCipher,32);
-
-            AES aesDecryptor(nfcAESEncryptionKey, nfcAESIV, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
-            aesDecryptor.process((uint8_t*)nfcAESCipher, (uint8_t*)decrypted, cypherLen);
-            decrypted[cypherLen] = 0;
-
-            char nfcUTIDnotStored[cypherLen+1];
-            memcpy(nfcUTIDnotStored, decrypted, cypherLen);
-            nfcUTIDnotStored[cypherLen]=0;
-
-            Serial.print("plainText:\t");
-            Serial.println(decrypted);
-            Serial.println("decrypted UTID of the NFC-Data with NFC-AES-Key recieved from Server");
-            Serial.print("UTID:\t\t");
-            Serial.println((char*)nfcUTIDnotStored);
-            Serial.println("-----------------------------------------------------------");
-
-            Serial.println("-----------------------------------------------------------");
-            Serial.println("encrypt UTID with httpAESEncryptionKey to forward UTID to the Server\n");
-            char* userKeys = &nfcUUID[0];
-            char keyHash[cypherLen+1];
-            unsigned char aes128BufferLen = cypherLen*2+1+cypherLen-1;  //(cypherLen*2)from 32 to 64 bit (+1) for 1 Null byte + (cypherLen-1) for 31 ' ' between two hex digits
-            char TDAT3[] = "testTDAT";
-
-            Serial.print("httpAESEncryptionKey:\t");
-            Serial.print((char*)httpAESEncryptionKey);
-            printBlock((uint8_t*)httpAESEncryptionKey,16);
-            Serial.print("httpAESIV:\t\t");
-            Serial.print((char*)httpAESIV);
-            printBlock((uint8_t*)httpAESIV,16);
-            Serial.print("plainText UTID:\t\t");
-            Serial.print((char*)nfcUTIDnotStored);
-            printBlock((uint8_t*)nfcUTIDnotStored,32);
-
-            AES aesEncryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
-            aesEncryptor.process((uint8_t*)nfcUTIDnotStored, (uint8_t*)keyHash, cypherLen);
-
-            char aes128Buffer[aes128BufferLen]; //(cypherLen*2)from 32 to 64 bit (+1) for 1 Null byte + (cypherLen-1) for 31 ' ' between two hex digits
-            for (unsigned int i = 0 ; i<cypherLen; i++)
-                sprintf(&aes128Buffer[i*3], "%02X ",keyHash[i]);
-            aes128Buffer[aes128BufferLen-1] = 0; //get 0 string ending. overwriting last ' '
-
-            Serial.println("encrypted UTID ready to be sent to the Server\n");
-            Serial.print("cipherText:\t\t");
-            Serial.println(aes128Buffer);
-            Serial.println("-----------------------------------------------------------");
-
-            Serial.println("-----------------------------------------------------------");
-            Serial.println("variables send as http Request to the Server\n");
-            Serial.print("UserKey:\t\t");
-            Serial.println(userKeys);
-            Serial.print("KeyHash:\t\t");
-            Serial.println(aes128Buffer);
-            Serial.print("TDAT3:\t\t\t");
-            printBlock((uint8_t*)TDAT3,strlen(TDAT3)-1);
-            Serial.println("-----------------------------------------------------------");
-
-            HTTPClient http;
-            String path = "DoorAcContPhase3/";
-            String headerType = "content-type";
-            String hexDigStr =  getRnd32hexDigString();
-            String boundary  = "--------------------------" + hexDigStr;
-            String headerStr = "multipart/form-data; boundary=" + boundary;
-            String content1  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+String(userKeys)+"\r\n";
-            String content2  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"keyHash\"\r\n\r\n"+String(aes128Buffer)+"\r\n";
-            String contetn3  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"TDAT3\"\r\n\r\n"+String(TDAT3)+"\r\n"+"--"+boundary+"--\r\n";
-            String body = content1 +content2 +contetn3;
-
-            http.begin(httpBaseURL + path);
-            http.addHeader(headerType, headerStr);
-            int httpCode = http.POST(body);
-
-            if (httpCode < 0)
-            {
-              Serial.println("request error - " + httpCode);
-              Serial.println(http.errorToString(httpCode));
-              retval = false;
-            }
-            else
-            {
-              String httpRespo = http.getString();
-
-              if(httpRespo.length()<180)
-              {
-                StaticJsonBuffer<180> jsonBuffer;
-                JsonObject& jsonObject = jsonBuffer.parseObject(httpRespo);
-                //Serial.println("Jsoned");
-
-                if (!jsonObject.success())
-                {
-                  Serial.println("parseObject() failed");
-                  retval = false;
-                }
-                else
-                {
-                  const char* doorAccesTokenFromServer = jsonObject["accessToken"];
-
-                  if (doorAccesTokenFromServer)
-                  {
-                    if((String(doorAccesTokenFromServer).length()) ==64)
-                    {
-                      Serial.println("-----------------------------------------------------------");
-
-                      Serial.println("got doorAccesToken as Server response from the Server\n");
-                      Serial.print("Server Token:\t\t");
-                      Serial.println(doorAccesTokenFromServer);
-                      Serial.println("-----------------------------------------------------------");
-
-                      Serial.println("-----------------------------------------------------------");
-                      Serial.println("calculate local Permission True Token SHA256(AES128(TDAT+doorPermissionString))\nand compare with the recieved one\n");
-                      unsigned char sha256length = 32;
-                      uint8_t plainUDID_TDATlength = UDIDLen +httpTDATLen;
-                      char toHashChar[httpTDATLen+doorPermissionLen];
-                      memcpy(&toHashChar[0], httpTDAT, httpTDATLen);
-                      memcpy(&toHashChar[httpTDATLen-1], doorPermission, doorPermissionLen);
-
-                      Serial.print("TDAT:\t\t\t\t");
-                      Serial.println(String(httpTDAT));
-                      Serial.print("doorPermissionString:\t\t");//toHashStr = (self.TDAT+door.permissionStr)
-                      Serial.println(String(doorPermission));//toHashStr = (self.TDAT+door.permissionStr)
-                      Serial.print("TDAT+doorPermissionString:\t");//toHashStr = (self.TDAT+door.permissionStr)
-                      Serial.println(String(toHashChar));//toHashStr = (self.TDAT+door.permissionStr)
-
-                      Serial.println("\n\ncalculate AES128(TDAT+doorPermissionString)\n");
-
-                      Serial.print("plainText:\t\t\t");
-                      Serial.println(toHashChar);
-                      Serial.print("AESIV:\t\t\t\t");
-                      Serial.println((char*)httpAESIV);
-                      Serial.print("AESEncryptionKey:\t\t");
-                      Serial.println((char*)httpAESEncryptionKey);
-
-                      char encToken[strlen(toHashChar)];
-                      AES aesEncryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
-                      aesEncryptor.process((uint8_t*)toHashChar, (uint8_t*)encToken, strlen(toHashChar));
-
-                      char aes128Buffer[strlen(toHashChar)*2+1];
-                      for (unsigned int i = 0 ; i<strlen(toHashChar); i++)
-                          sprintf(&aes128Buffer[i*2], "%02X",encToken[i]);
-
-                      Serial.println("\nAES cipher Result:\t");
-                      printBlock((uint8_t*)aes128Buffer,strlen(aes128Buffer)-1);
-                      Serial.println("-----------------------------------------------------------");
-
-                      Serial.println("-----------------------------------------------------------");
-
-                      Serial.println("SHA256 calculation of AES cipherText\n");
-                      byte sha256Hash[33];
-                      sha256Calc(aes128Buffer,sha256Hash,strlen(aes128Buffer) );
-
-                      char sha256Buffer[65];
-                      for (unsigned int i = 0 ; i<32; i++)
-                          sprintf(&sha256Buffer[i*2], "%02X",sha256Hash[i]);
-
-                      sha256Buffer[65-1] = 0;
-                      Serial.print("SHA256 Hash (hex):\t");
-                      Serial.println(sha256Buffer);
-                      Serial.println("-----------------------------------------------------------");
-                      Serial.println("-----------------------------------------------------------");
-                      Serial.println("comparing Local and Token from Server\n");
-                      String doorAccesTokenLocalString = String(sha256Buffer);
-                      String doorAccesTokenFromServerString = String(doorAccesTokenFromServer);
-
-                      Serial.print("Local Token:\t\t");
-                      Serial.println(doorAccesTokenLocalString);
-                      Serial.print("Server Token:\t\t");
-                      Serial.println(doorAccesTokenFromServerString);
-
-                      if(doorAccesTokenFromServerString == doorAccesTokenLocalString)
-                      {
-                        Serial.println("\n== == == Local and Server Token matched == == ==");
-                        Serial.println("              =======================");
-                        Serial.println("      ========     Open the Door     =======");
-                        Serial.println("              =======================\n");
-
-                        retval = true;
-                      }
-                    }
-                    else
-                      Serial.println("doorAccesToken wrong size");
-                    }
-                  else
-                  Serial.println("couldnt get doorAccesToken");
-                }
-                }
-                else
-                {
-                Serial.println("jsonBuffer to small");
-              }
-
-            }
-          }
-        else
-          Serial.println("read Json of NFC-Tag Failed");
       }
-      //TODO send UTID AES enciphered to the Server and recieve open Command 17.07.2018
+    }
+    else
+      Serial.println("JsonBuffer to small");
+
+    if( succAEScypher&&sucConvAESIV)
+    {
+
+      HTTPClient http;
+      int httpCode;
+      do{
+        String body;
+        String headerType;
+        String headerStr;
+        String path;
+        do {  //make http request and delete all the strings no need after http
+          /* code */      trennlinie();
+        trennlinie();
+        Serial.println("Starting to decrypt the NFC-Tag-Data\n");
+        char decrypted[cypherLen+1];
+
+        Serial.print("NFC-AES-Key:\t");
+        Serial.print((char*)nfcAESEncryptionKey);
+        printBlock(nfcAESEncryptionKey,16);
+        Serial.print("nfcAESIV:\t");
+        Serial.print((char*)nfcAESIV);
+        printBlock((uint8_t*)nfcAESIV, 16);
+        Serial.print("cypher:\t\t");
+        printBlock((uint8_t*)nfcAESCipher,32);
+
+        AES aesDecryptor(nfcAESEncryptionKey, nfcAESIV, AES::AES_MODE_128, AES::CIPHER_DECRYPT);
+        aesDecryptor.process((uint8_t*)nfcAESCipher, (uint8_t*)decrypted, cypherLen);
+        decrypted[cypherLen] = 0;
+
+        char nfcUTIDnotStored[cypherLen+1];
+        memcpy(nfcUTIDnotStored, decrypted, cypherLen);
+        nfcUTIDnotStored[cypherLen]=0;
+
+        Serial.print("plainText:\t");
+        Serial.println(decrypted);
+        Serial.println("\n\ndecrypted UTID of the NFC-Data with NFC-AES-Key recieved from Server\n");
+        Serial.print("UTID:\t\t");
+        Serial.println((char*)nfcUTIDnotStored);
+        trennlinie();
+
+        trennlinie();
+        Serial.println("encrypt UTID with httpAESEncryptionKey to forward UTID to the Server\n");
+        char* userKeys = &nfcUUID[0];
+        char keyHash[cypherLen+1];
+        unsigned char aes128BufferLen = cypherLen*2+1+cypherLen-1;  //(cypherLen*2)from 32 to 64 bit (+1) for 1 Null byte + (cypherLen-1) for 31 ' ' between two hex digits
+
+        TDATchecker tdatChecker = TDATchecker();
+        String TDAT3 = tdatChecker.calcSignature(httpTDAT, httpAESIV, httpAESEncryptionKey);
+        TDAT3.toCharArray(httpTDAT, httpTDATLen);
+
+        Serial.print("httpAESEncryptionKey:\t");
+        Serial.print((char*)httpAESEncryptionKey);
+        printBlock((uint8_t*)httpAESEncryptionKey,16);
+        Serial.print("httpAESIV:\t\t");
+        Serial.print((char*)httpAESIV);
+        printBlock((uint8_t*)httpAESIV,16);
+        Serial.print("plainText UTID:\t\t");
+        Serial.print((char*)nfcUTIDnotStored);
+        printBlock((uint8_t*)nfcUTIDnotStored,32);
+
+        AES aesEncryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
+        aesEncryptor.process((uint8_t*)nfcUTIDnotStored, (uint8_t*)keyHash, cypherLen);
+
+        char aes128Buffer[aes128BufferLen]; //(cypherLen*2)from 32 to 64 bit (+1) for 1 Null byte + (cypherLen-1) for 31 ' ' between two hex digits
+        for (unsigned int i = 0 ; i<cypherLen; i++)
+            sprintf(&aes128Buffer[i*2], "%02X",keyHash[i]);
+        aes128Buffer[aes128BufferLen-1] = 0; //get 0 string ending. overwriting last ' '
+
+
+
+        Serial.println("encrypted UTID ready to be sent to the Server\n");
+        Serial.print("cipherText:\t\t");
+        Serial.println(aes128Buffer);
+        trennlinie();
+
+        trennlinie();
+        Serial.println("variables send as http Request to the Server\n");
+        Serial.print("UserKey:\t\t");
+        Serial.println(userKeys);
+        Serial.print("KeyHash:\t\t");
+        Serial.println(aes128Buffer);
+        Serial.print("TDAT3:\t\t\t");
+        Serial.println(httpTDAT);
+        trennlinie();
+        Serial.println("00");
+
+        path = "DoorAcContPhase3/";
+        headerType = "content-type";
+        Serial.println("01");
+        String hexDigStr =  getRnd32hexDigString();
+        Serial.println("02");
+        String boundary  = "--------------------------" + hexDigStr;
+        headerStr = "multipart/form-data; boundary=" + boundary;
+        Serial.println("03");
+        String content1  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+String(userKeys)+"\r\n";
+        Serial.println("04");
+        String content2  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"keyHash\"\r\n\r\n"+String(aes128Buffer)+"\r\n";
+        Serial.println("05");
+        String contetn3  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"TDAT3\"\r\n\r\n"+String(httpTDAT)+"\r\n"+"--"+boundary+"--\r\n";
+        Serial.println("06");
+        body = content1 +content2 +contetn3;
+        Serial.println("1");
+        Serial.println(httpBaseURL);
+        Serial.println(path);
+        http.begin(httpBaseURL + path);
+        Serial.println("2");
+        http.addHeader(headerType, headerStr);
+        Serial.println("3");
+        Serial.print(body);
+        httpCode = http.POST(body);
+        Serial.println("4");
+       } while(false); //to delete all the Strings no need anymore
+     } while(false); //to delete all the Strings no need anymore
+
+
+      if (httpCode < 0)
+      {
+        Serial.println("request error - " + httpCode);
+        Serial.println(http.errorToString(httpCode));
+        retval = false;
+      }
+      else
+      {
+        String httpRespo = http.getString();
+        Serial.println("httpRespons:\t");
+        Serial.println(httpRespo);
+        if(httpRespo.length()<180)
+        {
+          StaticJsonBuffer<180> jsonBuffer;
+          JsonObject& jsonObject = jsonBuffer.parseObject(httpRespo);
+          //Serial.println("Jsoned");
+          Serial.println("5");
+
+          if (!jsonObject.success())
+          {
+            Serial.println("parseObject() failed");
+            return false;
+          }
+          else
+          {
+            const char* doorAccesTokenFromServer = jsonObject["accessToken"];
+
+            if (doorAccesTokenFromServer)
+            {
+              if((String(doorAccesTokenFromServer).length()) ==64)
+              {
+                trennlinie();
+
+                Serial.println("got doorAccesToken as Server response from the Server\n");
+                Serial.print("Server Token:\t\t");
+                Serial.println(doorAccesTokenFromServer);
+                trennlinie();
+
+                trennlinie();
+                Serial.println("calculate local Permission True Token SHA256(AES128(TDAT+doorPermissionString))\nand compare with the recieved one\n");
+                //unsigned char sha256length = 32;
+                uint8_t plainUDID_TDATlength = UDIDLen +httpTDATLen;
+                char toHashChar[httpTDATLen+doorPermissionLen];
+                memcpy(&toHashChar[0], httpTDAT, httpTDATLen);
+                memcpy(&toHashChar[httpTDATLen-1], doorPermission, doorPermissionLen);
+
+                Serial.print("TDAT:\t\t\t\t");
+                Serial.println(String(httpTDAT));
+                Serial.print("doorPermissionString:\t\t");//toHashStr = (self.TDAT+door.permissionStr)
+                Serial.println(String(doorPermission));//toHashStr = (self.TDAT+door.permissionStr)
+                Serial.print("TDAT+doorPermissionString:\t");//toHashStr = (self.TDAT+door.permissionStr)
+                Serial.println(String(toHashChar));//toHashStr = (self.TDAT+door.permissionStr)
+
+                Serial.println("\n\ncalculate AES128(TDAT+doorPermissionString)\n");
+
+                Serial.print("plainText:\t\t\t");
+                Serial.println(toHashChar);
+                Serial.print("AESIV:\t\t\t\t");
+                Serial.println((char*)httpAESIV);
+                Serial.print("AESEncryptionKey:\t\t");
+                Serial.println((char*)httpAESEncryptionKey);
+
+                char encToken[strlen(toHashChar)];
+                AES aesEncryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
+                aesEncryptor.process((uint8_t*)toHashChar, (uint8_t*)encToken, strlen(toHashChar));
+
+                char aes128Buffer[strlen(toHashChar)*2+1];
+                for (unsigned int i = 0 ; i<strlen(toHashChar); i++)
+                    sprintf(&aes128Buffer[i*2], "%02X",encToken[i]);
+
+                Serial.println("\nAES cipher Result:\t");
+                printBlock((uint8_t*)aes128Buffer,strlen(aes128Buffer)-1);
+                trennlinie();
+                trennlinie();
+
+                Serial.println("SHA256 calculation of AES cipherText\n");
+                byte sha256Hash[33];
+                sha256Calc(aes128Buffer,sha256Hash,strlen(aes128Buffer) );
+
+                char sha256Buffer[65];
+                for (unsigned int i = 0 ; i<32; i++)
+                    sprintf(&sha256Buffer[i*2], "%02X",sha256Hash[i]);
+
+                sha256Buffer[65-1] = 0;
+                Serial.print("SHA256 Hash (hex):\t");
+                Serial.println(sha256Buffer);
+                trennlinie();
+                trennlinie();
+                Serial.println("comparing Local and Token from Server\n");
+                String doorAccesTokenLocalString = String(sha256Buffer);
+                String doorAccesTokenFromServerString = String(doorAccesTokenFromServer);
+
+                Serial.print("Local Token:\t\t");
+                Serial.println(doorAccesTokenLocalString);
+                Serial.print("Server Token:\t\t");
+                Serial.println(doorAccesTokenFromServerString);
+
+                if(doorAccesTokenFromServerString == doorAccesTokenLocalString)
+                {
+                  Serial.println("\n== == == Local and Server Token matched == == ==");
+                  Serial.println("              =======================");
+                  Serial.println("      ========     Open the Door     =======");
+                  Serial.println("              =======================\n");
+
+                  retval = true;
+                }
+              }
+              else
+                Serial.println("doorAccesToken wrong size");
+              }
+            else
+            Serial.println("couldnt get doorAccesToken");
+          }
+          }
+          else
+          {
+          Serial.println("jsonBuffer to small");
+        }
+
+    }
   }
+
   if(retval!=true)
   {
     Serial.println("\n!= != != Local and Server Token didn't match != != !=");
@@ -629,17 +671,23 @@ void DoorAccesPhases::reset()
 {
   char freeEr16[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
   char freeEr32[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  char freeEr64[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
   memcpy(UDID, freeEr32, 33);
   memcpy(nfcUUID, freeEr32, 33);
   memcpy(nfcAESEncryptionKey, freeEr16, 17);
   memcpy(nfcAESIV, freeEr16, 17);
   memcpy(nfcDataLoad, freeEr32, 33);
   httpBaseURL = "";
-  memcpy(httpTDAT, freeEr32, 33);
+  memcpy(httpTDAT, freeEr64, 65);
   memcpy(httpAESIV, freeEr16, 17);
   memcpy(httpAESEncryptionKey, freeEr16, 17);
 }
 
+void DoorAccesPhases::trennlinie()
+{
+  Serial.println("-----------------------------------------------------------");
+}
 bool DoorAccesPhases::sha256Calc(char* strInBuf, byte* byteOutBuf, byte byteOutLen)
 {
   if(byteOutLen>=32)
@@ -661,8 +709,9 @@ bool DoorAccesPhases::getRndSha256(byte* ArrOut, byte ArrOutLength) //last value
   {
     if(ArrOutLength !=32){Serial.println("Are you shure you want to recieve a hash with a shorter length then 32 Bytes /256 bits? well if you do its up to you. but if you dont know what you are doing take 32 bytes");}
 
-    int timeDisturbedStrlength = 70;
-    char timeDisturbedStr[70] = "";
+    int timeDisturbedStrlength = 160;
+    char timeDisturbedStr[timeDisturbedStrlength+1];
+    timeDisturbedStr[timeDisturbedStrlength]=0;
     long long unsigned int u64_StartTick = Utils::GetMillis64(); //64 bit
     long long unsigned int u64_DisturbedTick = (u64_StartTick*3203431780337)%572199783953491*3203431780337;
     sprintf(timeDisturbedStr,"5l135hjlkal%lldkta52ljkjs0925ja1%lld", u64_StartTick, u64_DisturbedTick);
@@ -678,7 +727,9 @@ bool DoorAccesPhases::getRndSha256(byte* ArrOut, byte ArrOutLength) //last value
 String DoorAccesPhases::getRnd32hexDigString()
 {
   byte hexDig32length = 32;
-  byte hexDig32Buffer[33] ="";
+  byte hexDig32Buffer[hexDig32length+1];
+  hexDig32Buffer[hexDig32length] =0;
+
   getRndSha256(hexDig32Buffer, hexDig32length);
   unsigned char buffer = 0;
   //Serial.println(hexDig32Buffer);
@@ -686,6 +737,7 @@ String DoorAccesPhases::getRnd32hexDigString()
   //if (charArrOutLength<=32)
   //{
   char bufferStr[2]="";
+  bufferStr[1] = 0;
   String strOut="";
     for (unsigned char i=0; i<32; i++)
     {
@@ -748,10 +800,7 @@ String DoorAccesPhases::byteToHexString(char* charArr, unsigned char charArrLen)
 
 bool DoorAccesPhases::convertStringToByteArr(const char* input, byte* byteArrOutBuff, byte byteArrOutLength)
 {
-  //Serial.println("byteArrOutLength");
-  //Serial.println(byteArrOutLength);
-  //Serial.println("strlen(input)");
-  //Serial.println(strlen(input));
+
   if( byteArrOutLength>=strlen(input)/2)
   {
     for(byte i = 0;i< strlen(input); i=i+4)
@@ -760,7 +809,6 @@ bool DoorAccesPhases::convertStringToByteArr(const char* input, byte* byteArrOut
       byteArrOutBuff[i/2] += convertCharToHex(input[i+1]);
       byteArrOutBuff[i/2+1] = convertCharToHex(input[i+2])*16;
       byteArrOutBuff[i/2+1] += convertCharToHex(input[i+3]);
-      //Serial.print(input[i]); Serial.print(input[i+1]); Serial.print(input[i+2]); Serial.print(input[i+3]);
     }
     return true;
   }

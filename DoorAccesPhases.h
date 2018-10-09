@@ -17,7 +17,12 @@ class DoorAccesPhases {
         bool Phase2(void);
         bool Phase3(String& ndefPayBuff);
         void reset(void);
+
+        void printBlock(uint8_t* block, int length);
+        void trennlinie();
+
     private:
+
         bool sha256Calc(char* strInBuf, byte* ArrOutBuf,byte ArrOutLen);
 
         // bool getRndSha256(char* charArrOut, unsigned char charArrOutLength); //last value should be guees...32 XD
@@ -28,7 +33,6 @@ class DoorAccesPhases {
         String getRnd32hexDigString(); //last value should be guees...32 XD
         char convertCharToHex(char ch);
         bool convertStringToByteArr(const char* input, byte* byteArrOutBuff, byte byteArrOutLength);
-        void printBlock(uint8_t* block, int length);
 
         // char nfcUUID[32];
         // char nfcUDID[32];
@@ -50,7 +54,7 @@ class DoorAccesPhases {
         #define nfcDataLoadLen 33
         char nfcDataLoad[nfcDataLoadLen];
         String httpBaseURL;
-        #define httpTDATLen 33
+        #define httpTDATLen 65
         char httpTDAT[httpTDATLen];
         #define httpAESIVLen 17
         uint8_t httpAESIV[httpAESIVLen];

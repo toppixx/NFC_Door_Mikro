@@ -28,7 +28,7 @@
 //
 #include "TDATchecker.h"
 #include "Crypto.h"
-
+#include "DoorAccesPhases.h"
 TDATchecker::TDATchecker(){}
 
 TDATchecker::~TDATchecker(){}
@@ -36,50 +36,86 @@ TDATchecker::~TDATchecker(){}
 String  TDATchecker::init()
 {
   //not used in this context
+  //also not tested
   String rndString = "";
   for(unsigned char i=0; i++; i<32)
     rndString = rndString + char(random(1,254));
   return  rndString;
 }
 
-String TDATchecker::update(String oldTDAT, String passphrase, String iv)
+
+//
+// AES aesEncryptor(httpAESEncryptionKey, httpAESIV, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
+// aesEncryptor.process((uint8_t*)nfcUTIDnotStored, (uint8_t*)keyHash, cypherLen);
+//
+String TDATchecker::calcSignature(const char* signature, const uint8_t* iv, const uint8_t* encKey) //sigSTring should be TDAT, but could be also include further charecters
 {
-  byte sha256Buffer[33];
-  String strInBuf ="";
-  strInBuf = oldTDAT+ passphrase + iv;
-  char chrInBuf[strInBuf.length()];
-  strInBuf.toCharArray(chrInBuf, strInBuf.length());
+  Serial.println("------------------------------------------------------------------------");
+  Serial.println("calculate next signature SHA256(AES128(signature,iv,encKey))");
+  if(strlen(signature)==64)
+  {
+    Serial.println("signature");
+    Serial.println(signature);
+    char byteBuffer[strlen(signature)*2+1];
+    AES aesEncryptor(encKey, iv, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
+    aesEncryptor.process((const uint8_t*)signature,(uint8_t*) byteBuffer, strlen(signature));
+    byteBuffer[strlen(signature)]=0;
+    Serial.println("byteBuffer");
+    Serial.println(byteBuffer);
+    //writing AES cipher to HexDitsCharakters. With this ascii bytes a visible sha256 could be calculated
+    //char aes128Buffer[strlen(signature)*2+1];
+    //aes128Buffer[strlen(signature)*2]=0;
 
-  SHA256 shaHashen = SHA256();
-  shaHashen.doUpdate(chrInBuf);
-  shaHashen.doFinal(sha256Buffer);
+    for (int i = strlen(signature)-1; i>=0; i--)
+    {
+        char buffer[3];
+        // Serial.print(i);
+        // Serial.printf("  %02X  \n",byteBuffer[i]);
 
-  char sha256HexBuffer[32*3]; //make a 32*2+32-1+1 buffer for 32*2 hex digits 32-1 ' ' +1 0 string exit
-  for (unsigned int i = 0 ; i<32; i++)
-      sprintf(&sha256HexBuffer[i*2], "%02X ",sha256Buffer[i]);
-  sha256HexBuffer[32*3-1] = 0; //remove the last ' ' and replace it with string ending 0
-  return String(sha256HexBuffer);
+        sprintf(&buffer[0], "%02X",byteBuffer[i]);
+        byteBuffer[i*2] = buffer[0];
+        byteBuffer[i*2+1] = buffer[1];
+    }
+
+    byteBuffer[strlen(signature)*2]=0;
+    Serial.println("byteBuffer");
+    Serial.println(byteBuffer);
+
+    char sha256Buffer[33];
+    SHA256 shaHashen = SHA256();
+    shaHashen.doUpdate(byteBuffer);
+    shaHashen.doFinal((uint8_t*)sha256Buffer);
+    sha256Buffer[32]=0;
+
+    //char sha256HexBuffer[strlen(sha256Buffer)*2+1];
+    for (int i = 32-1 ; i>=0; i--)
+    {
+      char buffer[3];
+      // Serial.print(i);
+      // Serial.printf("  %02X  \n",sha256Buffer[i]);
+
+      sprintf(&buffer[0], "%02X",sha256Buffer[i]);
+      byteBuffer[i*2] = buffer[0];
+      byteBuffer[i*2+1] = buffer[1];
+    }
+    byteBuffer[64]=0;
+    Serial.println("byteBuffer");
+    Serial.println(byteBuffer);
+
+    Serial.print("nextSignature:\t");
+    Serial.println(byteBuffer);
+
+  return String(byteBuffer);
+  }
+  else
+    return String("signature to short");
 }
-bool TDATchecker::check(String incTDAT, String oldTDAT, String passphrase, String iv)
+
+bool TDATchecker::check(String incomingSignature, const char* oldSignature, const uint8_t* iv, const uint8_t* encKey)
 {
   bool retval = false;
-  byte sha256Buffer[33];
-  String strInBuf ="";
-
-  strInBuf = oldTDAT + passphrase + iv;
-  char chrInBuf[strInBuf.length()];
-  strInBuf.toCharArray(chrInBuf, strInBuf.length());
-
-  SHA256 shaHashen = SHA256();
-  shaHashen.doUpdate(chrInBuf);
-  shaHashen.doFinal(sha256Buffer);
-
-  char sha256HexBuffer[32*3]; //make a 32*2+32-1+1 buffer for 32*2 hex digits 32-1 ' ' +1 0 string exit
-  for (unsigned int i = 0 ; i<32; i++)
-      sprintf(&sha256HexBuffer[i*2], "%02X ",sha256Buffer[i]);
-  sha256HexBuffer[32*3-1] = 0; //remove the last ' ' and replace it with string ending 0
-
-  if(String(sha256HexBuffer) == incTDAT)
+  String newSignature = calcSignature(oldSignature, iv, encKey);
+  if(newSignature == incomingSignature)
       retval = true;
 
   return retval;
