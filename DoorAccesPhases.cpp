@@ -505,29 +505,19 @@ bool DoorAccesPhases::Phase3(String& ndefPayBuff)
 
         path = "DoorAcContPhase3/";
         headerType = "content-type";
-        Serial.println("01");
         String hexDigStr =  getRnd32hexDigString();
-        Serial.println("02");
         String boundary  = "--------------------------" + hexDigStr;
         headerStr = "multipart/form-data; boundary=" + boundary;
-        Serial.println("03");
         String content1  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"userKeys\"\r\n\r\n"+String(userKeys)+"\r\n";
-        Serial.println("04");
         String content2  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"keyHash\"\r\n\r\n"+String(aes128Buffer)+"\r\n";
-        Serial.println("05");
         String contetn3  = "--"+boundary+"\r\n"+"Content-Disposition: form-data; name=\"TDAT3\"\r\n\r\n"+String(httpTDAT)+"\r\n"+"--"+boundary+"--\r\n";
-        Serial.println("06");
         body = content1 +content2 +contetn3;
-        Serial.println("1");
         Serial.println(httpBaseURL);
         Serial.println(path);
         http.begin(httpBaseURL + path);
-        Serial.println("2");
         http.addHeader(headerType, headerStr);
-        Serial.println("3");
         Serial.print(body);
         httpCode = http.POST(body);
-        Serial.println("4");
        } while(false); //to delete all the Strings no need anymore
      } while(false); //to delete all the Strings no need anymore
 

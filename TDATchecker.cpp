@@ -54,7 +54,7 @@ String TDATchecker::calcSignature(const char* signature, const uint8_t* iv, cons
   Serial.println("calculate next signature SHA256(AES128(signature,iv,encKey))");
   if(strlen(signature)==64)
   {
-    Serial.println("signature");
+    Serial.print("\nsignature:\t");
     Serial.println(signature);
     char byteBuffer[strlen(signature)*2+1];
     AES aesEncryptor(encKey, iv, AES::AES_MODE_128, AES::CIPHER_ENCRYPT);
@@ -73,7 +73,7 @@ String TDATchecker::calcSignature(const char* signature, const uint8_t* iv, cons
         byteBuffer[i*2+1] = buffer[1];
     }
     byteBuffer[strlen(signature)*2]=0;
-    Serial.println("AES128(signature)(hex)");
+    Serial.print("\nAES128(signature)(hex):\t");
     Serial.println(byteBuffer);
     char sha256Buffer[33];
     SHA256 shaHashen = SHA256();
@@ -92,6 +92,7 @@ String TDATchecker::calcSignature(const char* signature, const uint8_t* iv, cons
 
     Serial.print("SHA256(AES128(signature)) or nextSignature(hex):\t");
     Serial.println(byteBuffer);
+    Serial.println("------------------------------------------------------------------------");
 
   return String(byteBuffer);
   }
